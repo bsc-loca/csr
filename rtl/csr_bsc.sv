@@ -1038,9 +1038,9 @@ module csr_bsc#(
                                     riscv_pkg::INSTR_PAGE_FAULT}) begin
                 ex_tval = w_data_core_i;
             end else if (ex_i && ex_cause_i == riscv_pkg::INSTR_ADDR_MISALIGNED) begin
-                ex_tval = 64'b0; //TODO: mirar si es la seguent o la anterior
+                ex_tval = 64'b0;
             end else if ((ex_i && ex_cause_i == riscv_pkg::ILLEGAL_INSTR) || (csr_xcpt && csr_xcpt_cause == riscv_pkg::ILLEGAL_INSTR)) begin
-                ex_tval = 64'b0; //TODO: propagar instrucció
+                ex_tval = 64'b0;
 	    end else if (csr_xcpt && csr_xcpt_cause == riscv_pkg::BREAKPOINT) begin
                 ex_tval = pc_i;
             end else begin
@@ -1125,16 +1125,16 @@ module csr_bsc#(
         // ------------------------------
         // Set the address translation at which the load and stores should occur
         // we can use the previous values since changing the address translation will always involve a pipeline flush
-        if (mprv && satp_q.mode == def_pkg::MODE_SV39 && (mstatus_q.mpp != riscv_pkg::PRIV_LVL_M))
+        if (mprv && satp_q.mode == def_pkg::MODE_SV39 && (mstatus_q.mpp != riscv_pkg::PRIV_LVL_M)) begin
             en_ld_st_translation_d = 1'b1;
-        else // otherwise we go with the regular settings
-            en_ld_st_translation_d = en_translation_o; //TODO
-            //ld_st_priv_lvl_o = (mprv) ? mstatus_q.mpp : priv_lvl_o;//TODO
-            //en_ld_st_translation_o = en_ld_st_translation_q;//TODO
-        //end
+        end else begin // otherwise we go with the regular settings
+            en_ld_st_translation_d = en_translation_o;
+            //ld_st_priv_lvl_o = (mprv) ? mstatus_q.mpp : priv_lvl_o;
+            //en_ld_st_translation_o = en_ld_st_translation_q;
+        end
 	
-	ld_st_priv_lvl_o = (mprv) ? mstatus_q.mpp : priv_lvl_o;//TODO
-	en_ld_st_translation_o = en_ld_st_translation_q;//TODO
+	ld_st_priv_lvl_o = (mprv) ? mstatus_q.mpp : priv_lvl_o;
+	en_ld_st_translation_o = en_ld_st_translation_q;
         
     end
 
