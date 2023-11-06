@@ -84,7 +84,7 @@ module csr_bsc#(
     output logic [2:0]                      fcsr_rm_o,
     output logic [1:0]                      fcsr_fs_o,
 
-    
+    output logic [1:0]                      vcsr_vs_o,
 
     output logic                            csr_replay_o,               // replay send to the core because there are some parts that are bussy
     output logic                            csr_stall_o,                // The csr are waiting a resp and de core is stalled
@@ -157,7 +157,7 @@ module csr_bsc#(
     //////////////////////////////////////////////
 
     // internal signal to keep track of access exceptions
-    logic        read_access_exception, update_access_exception, privilege_violation;
+    logic        read_access_exception, update_access_exception, update_access_exception_vs, privilege_violation;
     logic        csr_we, csr_read;
     logic        csr_xcpt;          // Internal csr exception bit.
     logic [63:0] csr_xcpt_cause;    // cause of the internal csr exception
@@ -172,6 +172,7 @@ module csr_bsc#(
     logic  sret;  // return from S-mode exception
     // CSR write causes us to mark the FPU state as dirty
     logic  dirty_fp_state_csr;
+    logic  dirty_v_state_csr;
 
     // actual state wires
     logic system_insn;
@@ -269,6 +270,23 @@ module csr_bsc#(
                         csr_rdata = {56'b0, fcsr_q.frm, fcsr_q.fflags};
                     end
                 end
+
+                riscv_pkg::CSR_VL: begin
+                    if (mstatus_q.vs == riscv_pkg::Off) begin
+                        read_access_exception = 1'b1;
+                    end else begin
+                        csr_rdata = vl_q;
+                    end
+                end
+
+                riscv_pkg::CSR_VTYPE: begin
+                    if (mstatus_q.vs == riscv_pkg::Off) begin
+                        read_access_exception = 1'b1;
+                    end else begin
+                        csr_rdata = vtype_q;
+                    end
+                end
+
                 // debug registers
                 riscv_pkg::CSR_DCSR:               csr_rdata = 64'b0; // not implemented
                 riscv_pkg::CSR_DPC:                csr_rdata = 64'b0; // not implemented
@@ -499,8 +517,6 @@ module csr_bsc#(
                 riscv_pkg::CSR_PMPADDR_13:;
                 riscv_pkg::CSR_PMPADDR_14:;
                 riscv_pkg::CSR_PMPADDR_15:;
-                riscv_pkg::CSR_VL: csr_rdata = vl_q;
-                riscv_pkg::CSR_VTYPE: csr_rdata = vtype_q;
                 //
                 default: read_access_exception = 1'b1;
             endcase
@@ -539,7 +555,7 @@ module csr_bsc#(
         cycle_d = cycle_q + 1'b1;
 
         eret_o                  = 1'b0;
-        flush                  = 1'b0;
+        flush                   = 1'b0;
         update_access_exception = 1'b0;
 
         perf_we_o               = 1'b0;
@@ -550,7 +566,7 @@ module csr_bsc#(
         priv_lvl_d              = priv_lvl_q;
 
         mstatus_clear = riscv_pkg::MSTATUS_UXL | riscv_pkg::MSTATUS_SXL | riscv_pkg::MSTATUS64_SD;
-        mstatus_set =   ((mstatus_q.xs == riscv_pkg::Dirty) | (mstatus_q.fs == riscv_pkg::Dirty))<<63 |
+        mstatus_set =   ((mstatus_q.xs == riscv_pkg::Dirty) | (mstatus_q.fs == riscv_pkg::Dirty) | (mstatus_q.vs == riscv_pkg::Dirty))<<63 |
                         riscv_pkg::XLEN_64 << 32|
                         riscv_pkg::XLEN_64 << 34;
         mstatus_int   = (mstatus_q & ~mstatus_clear)| mstatus_set;
@@ -935,7 +951,6 @@ module csr_bsc#(
 
         // assign the temporal value to _d values to avoid multiples assign in the same cicle
         mstatus_d   = mstatus_int;
-        mstatus_d.wpri2 = 2'b11;
         mcause_d    = mcause_int;
         scause_d    = scause_int;
         mtval_d     = mtval_int;
@@ -950,6 +965,15 @@ module csr_bsc#(
         // hardwire to zero if floating point extension is not present
         else if (!def_pkg::FP_PRESENT) begin
             mstatus_d.fs = riscv_pkg::Off;
+        end
+
+        // mark the vector extension register as dirty 
+        if (def_pkg::V_PRESENT && (dirty_v_state_csr)) begin
+            mstatus_d.vs = riscv_pkg::Dirty;
+        end
+        // hardwire to zero if vector extension is not present
+        else if (!def_pkg::V_PRESENT) begin
+            mstatus_d.vs = riscv_pkg::Off;
         end
 
 
@@ -1207,6 +1231,55 @@ module csr_bsc#(
         end
     end
 
+    // -------------------
+    // Vector instruccions excecution
+    // -------------------
+    always_comb begin : vsetvl_ctrl
+
+        vtype_new = rw_addr_i[10:0];
+        // new vlmax depending on the vtype config
+        vlmax = ((riscv_pkg::VLEN << vtype_new[1:0]) >> 3) >> vtype_new[4:2];
+        dirty_v_state_csr = 1'b0;
+        update_access_exception_vs = 1'b0;
+
+        if (vsetvl_insn) begin
+            if (mstatus_q.vs == riscv_pkg::Off) begin
+                update_access_exception_vs = 1'b1;
+                // default, keeps the old value
+                vl_d = vl_q;
+                vtype_d = vtype_q;
+            end else begin
+                dirty_v_state_csr = 1'b1;
+                // vl assignation depending on the AVL respect VLMAX
+                if (rw_cmd_i == 3'b111) begin //vsetvl with x0
+                    if (w_data_core_i == 64'b1) begin
+                        vl_d = vl_q;
+                    end else begin
+                        vl_d = vlmax;
+                    end
+                end else if (vlmax >= w_data_core_i) begin
+                    vl_d = w_data_core_i;
+                end else if ((vlmax<<1) >= w_data_core_i) begin
+                    vl_d = w_data_core_i>>1 + w_data_core_i[0];
+                end else begin
+                    vl_d = vlmax;
+                end
+                // vtype assignation
+                if (vtype_new[10:4] != 6'b0) begin
+                    vtype_d = {1'b1,63'b0};
+                end else begin
+                    vtype_d = {'0,vtype_new};
+                end  
+            end              
+        end else  begin
+            // default, keeps the old value
+            vl_d = vl_q;
+            vtype_d = vtype_q;
+        end
+    end
+
+    assign vpu_csr_o = {vtype_q[63], vtype_q[4:0], fcsr_q[7:5], 2'b0, vl_q[14:0], 14'b0};
+
     // ----------------------
     // CSR Exception Control
     // ----------------------
@@ -1222,7 +1295,7 @@ module csr_bsc#(
         // ----------------------------------
         // we got an exception in one of the processes above
         // throw an illegal instruction exception
-        if (update_access_exception || read_access_exception) begin
+        if (update_access_exception || update_access_exception_vs || read_access_exception) begin
             csr_xcpt_cause = riscv_pkg::ILLEGAL_INSTR;
             // we don't set the tval field as this will be set by the commit stage
             // this spares the extra wiring from commit to CSR and back to commit
@@ -1257,43 +1330,6 @@ module csr_bsc#(
             wfi_d = 1'b1;
         end
     end
-
-    // -------------------
-    // Vector instruccions excecution
-    // -------------------
-    always_comb begin : vsetvl_ctrl
-        vtype_new = rw_addr_i[10:0];
-        // new vlmax depending on the vtype config
-        vlmax = ((riscv_pkg::VLEN << vtype_new[1:0]) >> 3) >> vtype_new[4:2];
-        if (vsetvl_insn) begin
-            // vl assignation depending on the AVL respect VLMAX
-            if (rw_cmd_i == 3'b111) begin //vsetvl with x0
-                if (w_data_core_i == 64'b1) begin
-                    vl_d = vl_q;
-                end else begin
-                    vl_d = vlmax;
-                end
-            end else if (vlmax >= w_data_core_i) begin
-                vl_d = w_data_core_i;
-            end else if ((vlmax<<1) >= w_data_core_i) begin
-                vl_d = w_data_core_i>>1 + w_data_core_i[0];
-            end else begin
-                vl_d = vlmax;
-            end
-            // vtype assignation
-            if (vtype_new[10:4] != 6'b0) begin
-                vtype_d = {1'b1,63'b0};
-            end else begin
-                vtype_d = {'0,vtype_new};
-            end                
-        end else  begin
-            // default, keeps the old value
-            vl_d = vl_q;
-            vtype_d = vtype_q;
-        end
-    end
-
-    assign vpu_csr_o = {vtype_q[63], vtype_q[4:0], fcsr_q[7:5], 2'b0, vl_q[14:0], 14'b0};
 
     // -------------------
     // PCR contol logic
@@ -1384,6 +1420,10 @@ module csr_bsc#(
 
     assign fcsr_rm_o        = fcsr_q.frm;
     assign fcsr_fs_o        = mstatus_q.fs;
+
+    // VPU outputs
+    assign vcsr_vs_o        = mstatus_q.vs;
+
 
     // MMU outputs 
     assign satp_ppn_o       = satp_q.ppn;
@@ -1500,7 +1540,7 @@ module csr_bsc#(
             automatic logic [63:0] mstatus_fix, mstatus_clear ,mstatus_set;
 
             mstatus_clear = riscv_pkg::MSTATUS_UXL | riscv_pkg::MSTATUS_SXL | riscv_pkg::MSTATUS64_SD;
-            mstatus_set =   ((mstatus_d.xs == riscv_pkg::Dirty) | (mstatus_d.fs == riscv_pkg::Dirty))<<63 |
+            mstatus_set =   ((mstatus_d.xs == riscv_pkg::Dirty) | (mstatus_d.fs == riscv_pkg::Dirty) | (mstatus_d.vs == riscv_pkg::Dirty))<<63 |
                             riscv_pkg::XLEN_64 << 32|
                             riscv_pkg::XLEN_64 << 34;
             mstatus_fix = (mstatus_d & ~mstatus_clear) | mstatus_set;
