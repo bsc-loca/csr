@@ -1059,10 +1059,8 @@ module csr_bsc#(
             if (ex_i && ex_cause_i inside {riscv_pkg::LD_ADDR_MISALIGNED, riscv_pkg::LD_ACCESS_FAULT, 
                                     riscv_pkg::ST_AMO_ADDR_MISALIGNED, riscv_pkg::ST_AMO_ACCESS_FAULT,
                                     riscv_pkg::LD_PAGE_FAULT, riscv_pkg::ST_AMO_PAGE_FAULT,
-                                    riscv_pkg::INSTR_PAGE_FAULT}) begin
+                                    riscv_pkg::INSTR_PAGE_FAULT, riscv_pkg::INSTR_ADDR_MISALIGNED}) begin
                 ex_tval = w_data_core_i;
-            end else if (ex_i && ex_cause_i == riscv_pkg::INSTR_ADDR_MISALIGNED) begin
-                ex_tval = 64'b0;
             end else if ((ex_i && ex_cause_i == riscv_pkg::ILLEGAL_INSTR) || (csr_xcpt && csr_xcpt_cause == riscv_pkg::ILLEGAL_INSTR)) begin
                 ex_tval = 64'b0;
 	    end else if (csr_xcpt && csr_xcpt_cause == riscv_pkg::BREAKPOINT) begin
