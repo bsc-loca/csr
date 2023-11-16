@@ -20,7 +20,6 @@
 
 module csr_bsc#(
     parameter word_width = 64,
-    parameter addr_width_extended = 40,
     parameter paddr_width = 32,
     parameter csr_addr_width = 12,
     parameter mtvec_par = 'h104,
@@ -42,7 +41,7 @@ module csr_bsc#(
     //Exceptions 
     input logic                             ex_i,                       // exception produced in the core
     input logic [word_width-1:0]            ex_cause_i,                 //cause of the exception
-    input logic [addr_width_extended-1:0]   pc_i,                       //pc were the exception is produced
+    input logic [63:0]                      pc_i,                       //pc were the exception is produced
 
     input logic [1:0]                       retire_i,                   // shows if a instruction is retired from the core.
     
@@ -101,7 +100,7 @@ module csr_bsc#(
 
     output logic [paddr_width-1:0]          satp_ppn_o,                 // Page table base pointer for the PTW
 
-    output logic [addr_width_extended-1:0]  evec_o,                      // virtual address of the PC to execute after a Interrupt or exception
+    output logic [63:0]                     evec_o,                      // virtual address of the PC to execute after a Interrupt or exception
 
     output logic                            flush_o,                    // the core is executing a sfence.vm instruction and a tlb flush is needed
     output logic [39:0]                     vpu_csr_o,
@@ -1054,7 +1053,7 @@ module csr_bsc#(
         if (((ex_cause_i != riscv_pkg::DEBUG_REQUEST) && ex_i) || csr_xcpt) begin
             // do not flush, flush is reserved for CSR writes with side effects
             flush_o   = 1'b0;
-            ex_tval = {{24{pc_i[addr_width_extended-1]}},pc_i};
+            ex_tval = pc_i;
             //tval is the actual pc except for the data access exeptions
             if (ex_i && ex_cause_i inside {riscv_pkg::LD_ADDR_MISALIGNED, riscv_pkg::LD_ACCESS_FAULT, 
                                     riscv_pkg::ST_AMO_ADDR_MISALIGNED, riscv_pkg::ST_AMO_ACCESS_FAULT,
@@ -1091,7 +1090,7 @@ module csr_bsc#(
                 // set cause
                 scause_d       = csr_xcpt ? csr_xcpt_cause : ex_cause_i;
                 // set epc
-                sepc_d         = {{24{pc_i[addr_width_extended-1]}},pc_i};
+                sepc_d         = pc_i;
                 // set mtval or stval
                 // stval_d have a special case for a mecanisem of ariane. In DRAC stval_d = ex_i.tval.
                 stval_d        = ex_tval;
@@ -1104,7 +1103,7 @@ module csr_bsc#(
                 mstatus_d.mpp  = priv_lvl_q;
                 mcause_d       = csr_xcpt ? csr_xcpt_cause : ex_cause_i;
                 // set epc
-                mepc_d         = {{24{pc_i[addr_width_extended-1]}},pc_i};
+                mepc_d         = pc_i;
                 // set mtval or stval
                 // stval_d have a special case for a mecanisem of ariane. In DRAC stval_d = ex_i.tval.
                 mtval_d        = ex_tval;
