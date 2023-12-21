@@ -24,13 +24,14 @@ module csr_bsc#(
     parameter csr_addr_width = 12,
     parameter mtvec_par = 'h104,
     parameter start_addr_par = 'h100,
-    parameter core_id = 1'b0,
     parameter rocc_instance = 1'b0,
     parameter boot_addr = 'h100,
     parameter AsidWidth = 13
 )(
     input logic                             clk_i,
     input logic                             rstn_i,
+
+    input logic [word_width-1:0]            core_id_i,                  // hartid, for multicore systems
 
     // RW interface with the core
     input logic [csr_addr_width-1:0]        rw_addr_i,                  //read and write address form the core
@@ -68,7 +69,7 @@ module csr_bsc#(
     output logic  [csr_addr_width-1:0]      pcr_req_addr_o,             // read/write address to performance counter module (up to 29 aux counters possible in riscv encoding.h)
     output logic  [63:0]                    pcr_req_data_o,             // write data to performance counter module
     output logic  [2:0]                     pcr_req_we_o,               // Cmd of the petition
-    output logic                            pcr_req_core_id_o,          // core id of the tile
+    output logic  [word_width-1:0]          pcr_req_core_id_o,          // core id of the tile
 
     //PCR update inputs
     input  logic                            pcr_update_valid_i,
@@ -332,7 +333,7 @@ module csr_bsc#(
                 riscv_pkg::CSR_MVENDORID:          csr_rdata = 64'b0; // not implemented
                 riscv_pkg::CSR_MARCHID:            csr_rdata = 64'b0; // not implemented
                 riscv_pkg::CSR_MIMPID:             csr_rdata = 64'b0; // not implemented
-                riscv_pkg::CSR_MHARTID:            csr_rdata = core_id; 
+                riscv_pkg::CSR_MHARTID:            csr_rdata = core_id_i; 
                 // Counters and Timers
                 riscv_pkg::CSR_MCYCLE:             csr_rdata = cycle_q;
                 riscv_pkg::CSR_MINSTRET:           csr_rdata = instret_q;
@@ -1346,13 +1347,13 @@ module csr_bsc#(
         pcr_req_valid = cpu_ren & pcr_addr_valid & priv_sufficient & ~csr_xcpt & ~pcr_wait_resp_d;
         
 
-        if (pcr_req_valid && (!pcr_resp_valid_i || pcr_resp_core_id_i != core_id )) pcr_wait_resp_d = 1'b1;
-        else if (pcr_resp_valid_i && pcr_resp_core_id_i == core_id) pcr_wait_resp_d = 1'b0;
+        if (pcr_req_valid && (!pcr_resp_valid_i || pcr_resp_core_id_i != core_id_i )) pcr_wait_resp_d = 1'b1;
+        else if (pcr_resp_valid_i && pcr_resp_core_id_i == core_id_i) pcr_wait_resp_d = 1'b0;
         
         //pcr requests outputs connections
         pcr_req_addr_o = csr_addr;
         pcr_req_we_o = rw_cmd_i;
-        pcr_req_core_id_o = core_id;
+        pcr_req_core_id_o = core_id_i;
         pcr_req_valid_o = pcr_req_valid;
     end
 
@@ -1361,7 +1362,7 @@ module csr_bsc#(
     // -------------------
     assign csr_replay_o = pcr_req_valid & !pcr_req_ready_i; // pcr write but not ready
     assign csr_stall_o = wfi_q | // or waiting pcr response 
-                  (pcr_wait_resp_d & (~pcr_resp_valid_i | pcr_resp_core_id_i != core_id));
+                  (pcr_wait_resp_d & (~pcr_resp_valid_i | pcr_resp_core_id_i != core_id_i));
 
 
     // output assignments dependent on privilege mode
