@@ -22,11 +22,9 @@ module csr_bsc#(
     parameter word_width = 64,
     parameter paddr_width = 32,
     parameter csr_addr_width = 12,
-    parameter mtvec_par = 'h104,
-    parameter start_addr_par = 'h100,
-    parameter rocc_instance = 1'b0,
     parameter boot_addr = 'h100,
-    parameter AsidWidth = 13
+    parameter AsidWidth = 13,
+    parameter RETIRE_BW = 2
 )(
     input logic                             clk_i,
     input logic                             rstn_i,
@@ -35,7 +33,7 @@ module csr_bsc#(
 
     // RW interface with the core
     input logic [csr_addr_width-1:0]        rw_addr_i,                  //read and write address form the core
-    input logic [2:0]                       rw_cmd_i,                   //specific operation to execute from the core 
+    input logic [3:0]                       rw_cmd_i,                   //specific operation to execute from the core 
     input logic [word_width-1:0]            w_data_core_i,              //write data from the core
     output logic [word_width-1:0]           r_data_core_o,              // read data to the core, address specified with the rw_addr_i
 
@@ -44,8 +42,14 @@ module csr_bsc#(
     input logic [word_width-1:0]            ex_cause_i,                 //cause of the exception
     input logic [63:0]                      pc_i,                       //pc were the exception is produced
 
-    input logic [1:0]                       retire_i,                   // shows if a instruction is retired from the core.
+    input logic [RETIRE_BW-1:0]             retire_i,                   // shows if a instruction is retired from the core.
     
+    `ifdef LOX
+    `ifdef SIM_COMMIT_LOG_DPI
+    input logic                             torture_dpi_we_i,
+    `endif
+    `endif
+
     //Interruptions
     input logic                             rocc_interrupt_i,           // interrupt from the Rocc module
     input logic                             time_irq_i,                 // timer interrupt
@@ -109,7 +113,10 @@ module csr_bsc#(
     output logic [csr_addr_width-1:0]       perf_addr_o,                // read/write address to performance counter module
     output logic [63:0]                     perf_data_o,                // write data to performance counter module
     input  logic [63:0]                     perf_data_i,                // read data from performance counter module
-    output logic                            perf_we_o
+    output logic                            perf_we_o,
+    output logic [31:0]                     perf_mcountinhibit_o,
+    input  logic                            perf_count_ovf_int_req_i,
+    input  logic [31:3]                     perf_mhpm_ovf_bits_i
 );
 
     localparam int MHPM_TO_HPM_DIST = riscv_pkg::CSR_HPM_COUNTER_3 - riscv_pkg::CSR_MHPM_COUNTER_3;
@@ -130,14 +137,15 @@ module csr_bsc#(
     logic [63:0] mideleg_q,   mideleg_d;
     logic [63:0] mip_q,       mip_d;
     logic [63:0] mie_q,       mie_d;
-    logic [63:0] mcounteren_q,mcounteren_d;
+    logic [31:0] mcounteren_q,mcounteren_d;
+    logic [31:0] mcountinhibit_q,mcountinhibit_d;
     logic [63:0] mscratch_q,  mscratch_d;
     logic [63:0] mepc_q,      mepc_d;
     logic [63:0] mcause_q,    mcause_d;
     logic [63:0] mtval_q,     mtval_d;
 
     logic [63:0] stvec_q,     stvec_d;
-    logic [63:0] scounteren_q,scounteren_d;
+    logic [31:0] scounteren_q,scounteren_d;
     logic [63:0] sscratch_q,  sscratch_d;
     logic [63:0] sepc_q,      sepc_d;
     logic [63:0] scause_q,    scause_d;
@@ -149,6 +157,7 @@ module csr_bsc#(
 
     logic [63:0] cycle_q,     cycle_d;
     logic [63:0] instret_q,   instret_d;
+    logic [31:0] scountovf_q, scountovf_d;
 
     riscv_pkg::fcsr_t fcsr_q, fcsr_d;
 
@@ -206,13 +215,15 @@ module csr_bsc#(
 
     // flush caused by a sfence instruction
     logic flush_sfence;
+    
+    logic [11:0] perf_addr_dist;
 
 
     //////////////////////////////////////////////
     // System Instructions Decode
     //////////////////////////////////////////////
     // indicates if the request is a system instuction
-    assign system_insn = (rw_cmd_i == 3'b100) ? 1'b1 : 1'b0;
+    assign system_insn = (rw_cmd_i == 4'b0100) ? 1'b1 : 1'b0;
     assign priv_sufficient = priv_lvl_q >= rw_addr_i[9:8];
     // the instructions are codified using the rw_addr_i
     assign insn_call = (10'b0000000000 == rw_addr_i[9:0] && system_insn) ? 1'b1 : 1'b0;
@@ -225,7 +236,7 @@ module csr_bsc#(
     //////////////////////////////////////////////
     // Vector Instructions Decode
     //////////////////////////////////////////////
-    assign vsetvl_insn = (rw_cmd_i == 3'b110 || rw_cmd_i == 3'b111) ? 1'b1 : 1'b0;
+    assign vsetvl_insn = (rw_cmd_i == 4'b0110 || rw_cmd_i == 4'b0111) ? 1'b1 : 1'b0;
 
     //////////////////////////////////////////////
     // VPU Instructions Decode
@@ -238,6 +249,13 @@ module csr_bsc#(
     assign csr_addr = riscv_pkg::csr_t'(rw_addr_i);
 
     // ----------------
+    // HPM Assignments
+    // ----------------
+
+    assign perf_mcountinhibit_o = mcountinhibit_q;
+    assign perf_addr_o = csr_addr.address[11:0] - perf_addr_dist;
+
+    // ----------------
     // CSR Read logic
     // ----------------
     always_comb begin : csr_read_process
@@ -245,7 +263,7 @@ module csr_bsc#(
         read_access_exception = 1'b0;
         pcr_addr_valid = 1'b0;
         csr_rdata = 64'b0;
-        perf_addr_o = '0;
+        perf_addr_dist = '0;
 
         if (csr_read) begin
             unique case (csr_addr.address)
@@ -263,6 +281,30 @@ module csr_bsc#(
                         csr_rdata = {61'b0, fcsr_q.frm};
                     end
                 end
+		`ifdef LAGARTO_KA //VPU
+                riscv_pkg::CSR_FCSR: begin
+                    if (mstatus_q.fs == riscv_pkg::Off) begin
+                        read_access_exception = 1'b1;
+                    end else begin
+                        csr_rdata = {53'b0, fcsr_q.vxrm, fcsr_q.vxsat, fcsr_q.frm, fcsr_q.fflags};
+                    end
+                end
+                riscv_pkg::CSR_VXSAT: begin
+                    if (mstatus_q.vs == riscv_pkg::Off) begin
+                        read_access_exception = 1'b1;
+                    end else begin
+                        csr_rdata = {63'b0, fcsr_q.vxsat};
+                    end
+                end
+                riscv_pkg::CSR_VXRM: begin
+                    if (mstatus_q.vs == riscv_pkg::Off) begin
+                        read_access_exception = 1'b1;
+                    end else begin
+                        csr_rdata = {62'b0, fcsr_q.vxrm};
+
+                    end
+                end
+                `else 
                 riscv_pkg::CSR_FCSR: begin
                     if (mstatus_q.fs == riscv_pkg::Off) begin
                         read_access_exception = 1'b1;
@@ -270,7 +312,7 @@ module csr_bsc#(
                         csr_rdata = {56'b0, fcsr_q.frm, fcsr_q.fflags};
                     end
                 end
-
+                `endif
                 riscv_pkg::CSR_VL: begin
                     if (mstatus_q.vs == riscv_pkg::Off) begin
                         read_access_exception = 1'b1;
@@ -304,7 +346,7 @@ module csr_bsc#(
                 riscv_pkg::CSR_SIE:                csr_rdata = mie_q & mideleg_q;
                 riscv_pkg::CSR_SIP:                csr_rdata = mip_q & mideleg_q;
                 riscv_pkg::CSR_STVEC:              csr_rdata = stvec_q;
-                riscv_pkg::CSR_SCOUNTEREN:         csr_rdata = scounteren_q;
+                riscv_pkg::CSR_SCOUNTEREN:         csr_rdata = {{32{1'b0}}, scounteren_q};
                 riscv_pkg::CSR_SSCRATCH:           csr_rdata = sscratch_q;
                 riscv_pkg::CSR_SEPC:               csr_rdata = sepc_q;
                 riscv_pkg::CSR_SCAUSE:             csr_rdata = scause_q;
@@ -324,7 +366,7 @@ module csr_bsc#(
                 riscv_pkg::CSR_MIDELEG:            csr_rdata = mideleg_q;
                 riscv_pkg::CSR_MIE:                csr_rdata = mie_q;
                 riscv_pkg::CSR_MTVEC:              csr_rdata = mtvec_q;
-                riscv_pkg::CSR_MCOUNTEREN:         csr_rdata = mcounteren_q;
+                riscv_pkg::CSR_MCOUNTEREN:         csr_rdata = {{32{1'b0}}, mcounteren_q};
                 riscv_pkg::CSR_MSCRATCH:           csr_rdata = mscratch_q;
                 riscv_pkg::CSR_MEPC:               csr_rdata = mepc_q;
                 riscv_pkg::CSR_MCAUSE:             csr_rdata = mcause_q;
@@ -402,10 +444,10 @@ module csr_bsc#(
                 riscv_pkg::CSR_HPM_COUNTER_29,
                 riscv_pkg::CSR_HPM_COUNTER_30,
                 riscv_pkg::CSR_HPM_COUNTER_31: begin
-                    perf_addr_o = csr_addr.address[11:0] - MHPM_TO_HPM_DIST;
+                    perf_addr_dist = MHPM_TO_HPM_DIST;
                     csr_rdata = perf_data_i;
                 end
-
+                riscv_pkg::CSR_SCOUNTOVF:         csr_rdata = {{32{1'b0}}, scountovf_q & mcounteren_q};
                 riscv_pkg::CSR_MHPM_EVENT_3,
                 riscv_pkg::CSR_MHPM_EVENT_4,
                 riscv_pkg::CSR_MHPM_EVENT_5,
@@ -524,7 +566,7 @@ module csr_bsc#(
     end
 
 
-
+    logic [$clog2(RETIRE_BW+1)-1:0] retire_cnt;
 
     // ---------------------------
     // CSR Write and update logic
@@ -549,10 +591,20 @@ module csr_bsc#(
         // Counters
         // --------------------
         // increase instruction retired counter
-        if (!ex_i) instret = instret + retire_i[0] + retire_i[1];
+
+        retire_cnt = {$clog2(RETIRE_BW+1){1'b0}};
+        for (int i=0; i<RETIRE_BW; i++) begin
+            retire_cnt += retire_i[i];
+        end
+
+        if (!ex_i && ~mcountinhibit_q[2])  begin 
+            instret = instret + retire_cnt;
+        end
         instret_d = instret;
         // increment the cycle count 
-        cycle_d = cycle_q + 1'b1;
+        cycle_d = cycle_q + 1'(~mcountinhibit_q[0]);
+        
+        scountovf_d = {perf_mhpm_ovf_bits_i, 3'b000};
 
         eret_o                  = 1'b0;
         flush                   = 1'b0;
@@ -595,7 +647,7 @@ module csr_bsc#(
         // External Interrupts
         // ---------------------
         // the IRQ_M_EXT = irq_i || rocc_interrupt_i, IRQ_M_SOFT = m_soft_irq_i and IRQ_M_TIMER = time_irq_i
-        mip_d = {mip_q[63:12],irq_i || rocc_interrupt_i, mip_q[10:8], time_irq_i, mip_q[6:4], m_soft_irq_i, mip_q[2:0]};
+        mip_d = {mip_q[63:14], perf_count_ovf_int_req_i || mip_q[13], mip_q[12], irq_i || rocc_interrupt_i, mip_q[10:8], time_irq_i, mip_q[6:4], m_soft_irq_i, mip_q[2:0]};
 
 
 
@@ -606,6 +658,7 @@ module csr_bsc#(
         mepc_int                = mepc_q;
         mcause_int              = mcause_q;
         mcounteren_d            = mcounteren_q;
+        mcountinhibit_d         = mcountinhibit_q;
         mscratch_d              = mscratch_q;
         mtval_int               = mtval_q;
 
@@ -645,6 +698,42 @@ module csr_bsc#(
                         flush = 1'b1;
                     end
                 end
+                `ifdef LAGARTO_KA //VPU
+                riscv_pkg::CSR_FCSR: begin
+                    if (mstatus_q.fs == riscv_pkg::Off) begin
+                        update_access_exception = 1'b1;
+                    end else begin
+                        dirty_fp_state_csr = 1'b1;
+                        fcsr_d[7:0] = csr_wdata[7:0]; // ignore writes to reserved space
+                        fcsr_d.vxsat = csr_wdata[8];
+                        fcsr_d.vxrm = csr_wdata[10:9];
+                        // this instruction has side-effects
+                        flush = 1'b1;
+                    end
+                end
+                riscv_pkg::CSR_VXSAT: begin
+                    if (mstatus_q.vs == riscv_pkg::Off) begin
+                        update_access_exception = 1'b1;
+                    end else begin
+                        dirty_fp_state_csr = 1'b1;
+                        dirty_v_state_csr  = 1'b1;
+                        fcsr_d.vxsat    = csr_wdata[0];
+                        // this instruction has side-effects
+                        flush = 1'b1;
+                    end
+                end
+                riscv_pkg::CSR_VXRM: begin
+                    if (mstatus_q.vs == riscv_pkg::Off) begin
+                        update_access_exception = 1'b1;
+                    end else begin
+                        dirty_fp_state_csr = 1'b1;
+                        dirty_v_state_csr  = 1'b1;
+                        fcsr_d.vxrm    = csr_wdata[1:0];
+                        // this instruction has side-effects
+                        flush = 1'b1;
+                    end
+                end
+                `else
                 riscv_pkg::CSR_FCSR: begin
                     if (mstatus_q.fs == riscv_pkg::Off) begin
                         update_access_exception = 1'b1;
@@ -657,7 +746,7 @@ module csr_bsc#(
                         flush = 1'b1;
                     end
                 end
-
+                `endif
                 // debug CSR
                 riscv_pkg::CSR_DCSR:;// not implemented
                 riscv_pkg::CSR_DPC:;// not implemented
@@ -679,17 +768,17 @@ module csr_bsc#(
                 // if the corresponding bit in mideleg is set
                 riscv_pkg::CSR_SIE: begin
                     // the mideleg makes sure only delegate-able register (and therefore also only implemented registers) are written
-                    mask = riscv_pkg::MIP_SSIP | riscv_pkg::MIP_STIP | riscv_pkg::MIP_SEIP;
+                    mask = riscv_pkg::MIP_SSIP | riscv_pkg::MIP_STIP | riscv_pkg::MIP_SEIP | riscv_pkg::MIP_LCOFIP;
                     mie_d = (mie_q & ~mask) | (csr_wdata & mask);
                 end
 
                 riscv_pkg::CSR_SIP: begin
                     // only the supervisor software interrupt is write-able, iff delegated
-                    mask = riscv_pkg::MIP_SSIP & mideleg_q;
+                    mask = (riscv_pkg::MIP_SSIP | riscv_pkg::MIP_LCOFIP) & mideleg_q;
                     mip_d = (mip_q & ~mask) | (csr_wdata & mask);
                 end
 
-                riscv_pkg::CSR_SCOUNTEREN:         scounteren_d = {{32{1'b0}}, csr_wdata[31:0]};
+                riscv_pkg::CSR_SCOUNTEREN:         scounteren_d = csr_wdata[31:0];
                 riscv_pkg::CSR_STVEC:              stvec_d     = {csr_wdata[63:2], 1'b0, csr_wdata[0]};
                 riscv_pkg::CSR_SSCRATCH:           sscratch_d  = csr_wdata;
                 riscv_pkg::CSR_SEPC:               sepc_int    = {csr_wdata[63:1], 1'b0};
@@ -738,12 +827,12 @@ module csr_bsc#(
                 // machine interrupt delegation register
                 // we do not support user interrupt delegation
                 riscv_pkg::CSR_MIDELEG: begin
-                    mask = riscv_pkg::MIP_SSIP | riscv_pkg::MIP_STIP | riscv_pkg::MIP_SEIP;
+                    mask = riscv_pkg::MIP_SSIP | riscv_pkg::MIP_STIP | riscv_pkg::MIP_SEIP | riscv_pkg::MIP_LCOFIP;
                     mideleg_d = (mideleg_q & ~mask) | (csr_wdata & mask);
                 end
                 // mask the register so that unsupported interrupts can never be set
                 riscv_pkg::CSR_MIE: begin
-                    mask = riscv_pkg::MIP_SSIP | riscv_pkg::MIP_STIP | riscv_pkg::MIP_SEIP | riscv_pkg::MIP_MSIP | riscv_pkg::MIP_MTIP | riscv_pkg::MIP_MEIP;
+                    mask = riscv_pkg::MIP_SSIP | riscv_pkg::MIP_STIP | riscv_pkg::MIP_SEIP | riscv_pkg::MIP_MSIP | riscv_pkg::MIP_MTIP | riscv_pkg::MIP_MEIP | riscv_pkg::MIP_LCOFIP;
                     mie_d = (mie_q & ~mask) | (csr_wdata & mask); // we only support supervisor and M-mode interrupts
                 end
 
@@ -754,13 +843,14 @@ module csr_bsc#(
                     if (csr_wdata[0]) mtvec_d = {csr_wdata[63:8], 7'b0, csr_wdata[0]};
                 end
 
-                riscv_pkg::CSR_MCOUNTEREN:         mcounteren_d = {{32{1'b0}}, csr_wdata[31:0]};
+                riscv_pkg::CSR_MCOUNTEREN:         mcounteren_d = csr_wdata[31:0];
+                riscv_pkg::CSR_MCOUNTINHIBIT:      mcountinhibit_d = csr_wdata[31:0];
                 riscv_pkg::CSR_MSCRATCH:           mscratch_d  = csr_wdata;
                 riscv_pkg::CSR_MEPC:               mepc_int    = {csr_wdata[63:1], 1'b0};
                 riscv_pkg::CSR_MCAUSE:             mcause_int  = csr_wdata;
                 riscv_pkg::CSR_MTVAL:              mtval_int   = csr_wdata;
                 riscv_pkg::CSR_MIP: begin
-                    mask = riscv_pkg::MIP_SSIP | riscv_pkg::MIP_STIP | riscv_pkg::MIP_SEIP;
+                    mask = riscv_pkg::MIP_SSIP | riscv_pkg::MIP_STIP | riscv_pkg::MIP_SEIP | riscv_pkg::MIP_LCOFIP;
                     mip_d = (mip_q & ~mask) | (csr_wdata & mask);
                 end
                 // performance counters
@@ -864,7 +954,8 @@ module csr_bsc#(
                 riscv_pkg::CSR_HPM_COUNTER_28,
                 riscv_pkg::CSR_HPM_COUNTER_29,
                 riscv_pkg::CSR_HPM_COUNTER_30,
-                riscv_pkg::CSR_HPM_COUNTER_31:
+                riscv_pkg::CSR_HPM_COUNTER_31,
+                riscv_pkg::CSR_SCOUNTOVF:
                     update_access_exception = 1'b1;
 
                 riscv_pkg::CSR_MEM_MAP_0,
@@ -1012,7 +1103,11 @@ module csr_bsc#(
         // Supervisor Timer Interrupt
         else if (mie_q[riscv_pkg::S_TIMER_INTERRUPT[5:0]] && mip_q[riscv_pkg::S_TIMER_INTERRUPT[5:0]]) begin
             interrupt_cause = riscv_pkg::S_TIMER_INTERRUPT;
-        end  
+        end
+        // Local Count Overflow Interrupt
+        else if (mip_q[riscv_pkg::LCOF_INTERRUPT[5:0]] && mie_q[riscv_pkg::LCOF_INTERRUPT[5:0]]) begin
+            interrupt_cause = riscv_pkg::LCOF_INTERRUPT;
+        end
         
         // if the priv is different of M or the mie is 1, the interrups are enable
         global_enable = ((mstatus_q.mie & (priv_lvl_o == riscv_pkg::PRIV_LVL_M))
@@ -1174,10 +1269,11 @@ module csr_bsc#(
         sret      = 1'b0;
 
         unique case (rw_cmd_i)
-            3'b001: csr_wdata = w_data_core_i;                // Write
-            3'b010: csr_wdata = w_data_core_i | csr_rdata;    // Set
-            3'b011: csr_wdata = (~w_data_core_i) & csr_rdata; // Clear
-            3'b101: csr_we    = 1'b0;                         // Read
+            4'b0001: csr_wdata = w_data_core_i;                // Write and Read
+            4'b0010: csr_wdata = w_data_core_i | csr_rdata;    // Set and Read
+            4'b0011: csr_wdata = (~w_data_core_i) & csr_rdata; // Clear and Read
+            4'b0101: csr_we    = 1'b0;                         // Read only
+            4'b1000: csr_read  = 1'b0;                         // Write only
             default: begin
                 csr_we   = 1'b0;
                 csr_read = 1'b0;
@@ -1206,7 +1302,7 @@ module csr_bsc#(
         privilege_violation = 1'b0;
         // if we are reading or writing, check for the correct privilege level this has
         // precedence over interrupts
-        if (rw_cmd_i inside {3'b001, 3'b010, 3'b011, 3'b101}) begin // inside of: write, set, clear, read
+        if (rw_cmd_i inside {4'b0001, 4'b0010, 4'b0011, 4'b0101, 4'b1000}) begin // inside of: rw, set, clear, read, write
             if ((riscv_pkg::priv_lvl_t'(priv_lvl_o & csr_addr.csr_decode.priv_lvl) != csr_addr.csr_decode.priv_lvl)) begin
                 privilege_violation = 1'b1;
             end
@@ -1339,7 +1435,7 @@ module csr_bsc#(
         pcr_wait_resp_d = pcr_wait_resp_q;
 
         // determine if the cpu requests a read of a csr
-        if (rw_cmd_i inside {3'b001, 3'b010, 3'b011, 3'b101}) begin //write, set, clear, read
+        if (rw_cmd_i inside {4'b0001, 4'b0010, 4'b0011, 4'b0101}) begin //rw, set, clear, read
             cpu_ren = 1'b1;
         end
 
@@ -1454,20 +1550,22 @@ module csr_bsc#(
             mie_q                  <= 64'b0;
             mepc_q                 <= 64'b0;
             mcause_q               <= 64'b0;
-            mcounteren_q           <= 64'b0;
+            mcounteren_q           <= 32'b0;
+            mcountinhibit_q        <= 32'b0;
             mscratch_q             <= 64'b0;
             mtval_q                <= 64'b0;
             // supervisor mode registers
             sepc_q                 <= 64'b0;
             scause_q               <= 64'b0;
             stvec_q                <= 64'b0;
-            scounteren_q           <= 64'b0;
+            scounteren_q           <= 32'b0;
             sscratch_q             <= 64'b0;
             stval_q                <= 64'b0;
             satp_q                 <= 64'b0;
             // timer and counters
             cycle_q                <= 64'b0;
             instret_q              <= 64'b0;
+            scountovf_q            <= 32'b0;
             // aux registers
             en_ld_st_translation_q <= 1'b0;
             // wait for interrupt
@@ -1511,6 +1609,7 @@ module csr_bsc#(
             // timer and counters
             cycle_q                <= cycle_d;
             instret_q              <= instret_d;
+            scountovf_q            <= scountovf_d;
             // aux registers
             en_ld_st_translation_q <= en_ld_st_translation_d;
             // wait for interrupt
@@ -1534,6 +1633,77 @@ module csr_bsc#(
         import "DPI-C" function void csr_change (input longint unsigned addr, input longint unsigned value);
 
         // Very important!!! Must be negedge to execute it before torture_dump when an instruction commits in datapath!
+        `ifdef LAGARTO_KA
+        logic csr_we_q1,csr_we_q2,csr_we_q3;
+        logic [1:0] retire_q1,fcsr_flags_valid_q1,fcsr_flags_valid_q2,fcsr_flags_valid_q3;
+        riscv_pkg::csr_t csr_addr_q1, csr_addr_q2 ,csr_addr_q3;
+        riscv_pkg::status_rv64_t  mstatus_q1,  mstatus_q2,mstatus_q3;
+        logic [4:0] fcsr_flags_bits_q1,fcsr_flags_bits_q2,fcsr_flags_bits_q3,fflags_q1,fflags_q2,fflags_q3;
+
+        mvp_dpreg  #(1)       _fcsr_flags_valid_q1_  (clk_i, rstn_i, fcsr_flags_valid_i,    fcsr_flags_valid_q1);
+        mvp_dpreg  #(1)       _fcsr_flags_valid_q2_  (clk_i, rstn_i, fcsr_flags_valid_q1,   fcsr_flags_valid_q2);
+        mvp_dpreg  #(1)       _fcsr_flags_valid_q3_  (clk_i, rstn_i, fcsr_flags_valid_q2,   fcsr_flags_valid_q3);
+
+        mvp_dpreg  #(5)       _fcsr_flags_bits_q1_  (clk_i, rstn_i, fcsr_flags_bits_i,    fcsr_flags_bits_q1);
+        mvp_dpreg  #(5)       _fcsr_flags_bits_q2_  (clk_i, rstn_i, fcsr_flags_bits_q1,   fcsr_flags_bits_q2);
+        mvp_dpreg  #(5)       _fcsr_flags_bits_q3_  (clk_i, rstn_i, fcsr_flags_bits_q2,   fcsr_flags_bits_q3);
+
+        mvp_dpreg  #(5)       _fcsr_flags_q1_  (clk_i, rstn_i, fcsr_d.fflags,        fflags_q1);
+        mvp_dpreg  #(5)       _fcsr_flags_q2_  (clk_i, rstn_i, fflags_q1,            fflags_q2);
+        mvp_dpreg  #(5)       _fcsr_flags_q3_  (clk_i, rstn_i, fflags_q2,            fflags_q3);
+
+        mvp_dpreg  #(1)       _csr_we_q1_  (clk_i, rstn_i, csr_we,    csr_we_q1);
+        mvp_dpreg  #(1)       _csr_we_q2_  (clk_i, rstn_i, csr_we_q1, csr_we_q2);
+        mvp_dpreg  #(1)       _csr_we_q3_  (clk_i, rstn_i, csr_we_q2, csr_we_q3);
+        
+        mvp_dpreg  #(24)       _csr_addr_q1_  (clk_i, rstn_i, csr_addr,    csr_addr_q1);
+        mvp_dpreg  #(24)       _csr_addr_q2_  (clk_i, rstn_i, csr_addr_q1, csr_addr_q2);
+        mvp_dpreg  #(24)       _csr_addr_q3_  (clk_i, rstn_i, csr_addr_q2, csr_addr_q3);
+
+        mvp_dpreg  #(64)       _csr_mstatus_q1_  (clk_i, rstn_i, mstatus_q,  mstatus_q1);
+        mvp_dpreg  #(64)       _csr_mstatus_q2_  (clk_i, rstn_i, mstatus_q1, mstatus_q2);
+        mvp_dpreg  #(64)       _csr_mstatus_q3_  (clk_i, rstn_i, mstatus_q2, mstatus_q3);
+
+        mvp_dpreg  #(2)       _csr_retire_q1_  (clk_i, rstn_i, retire_i, retire_q1);
+        always_ff @(negedge clk_i) begin
+            automatic logic [63:0] mstatus_fix, mstatus_clear ,mstatus_set;
+            mstatus_clear = riscv_pkg::MSTATUS_UXL | riscv_pkg::MSTATUS_SXL | riscv_pkg::MSTATUS64_SD;
+            mstatus_set =   ((mstatus_d.xs == riscv_pkg::Dirty) | (mstatus_d.fs == riscv_pkg::Dirty))<<63 |
+                            riscv_pkg::XLEN_64 << 32|
+                            riscv_pkg::XLEN_64 << 34;
+            mstatus_fix = (mstatus_d & ~mstatus_clear) | mstatus_set;
+
+            if (rstn_i & (|retire_q1)) begin
+                // CSRs which can change due to side-effects etc
+
+                // For some reason mstatus is updated in multiple cycles, but at commit we need the value that will be set later
+                // This might break in some random tests.....
+                if (mstatus_q3 != mstatus_fix) csr_change(riscv_pkg::CSR_MSTATUS, mstatus_fix);
+
+                if (fcsr_flags_valid_q1 && fcsr_flags_bits_q1) csr_change(riscv_pkg::CSR_FFLAGS, fflags_q1);
+
+                // CSRs which only change when written to
+                if (csr_we_q3) begin
+                    case(csr_addr_q3)
+                        riscv_pkg::CSR_MSTATUS, riscv_pkg::CSR_SSTATUS:
+                            ; // Covered by previous mstatus check
+                        riscv_pkg::CSR_MTVEC: csr_change(csr_addr_q3, mtvec_d);
+                        riscv_pkg::CSR_MEPC: csr_change(csr_addr_q3, mepc_d);
+                        riscv_pkg::CSR_MCAUSE: csr_change(csr_addr_q3, mcause_d);
+                        riscv_pkg::CSR_MSCRATCH: csr_change(csr_addr_q3, mscratch_d);
+                        riscv_pkg::CSR_MEDELEG: csr_change(csr_addr_q3, medeleg_d);
+                        riscv_pkg::CSR_MIE: csr_change(csr_addr_q3, mie_d);
+                        riscv_pkg::CSR_SATP: csr_change(csr_addr_q3, satp_d);
+                        riscv_pkg::CSR_STVEC: csr_change(csr_addr_q3, stvec_d);
+                        riscv_pkg::CSR_SSCRATCH: csr_change(csr_addr_q3, sscratch_d);
+                        riscv_pkg::CSR_SEPC: csr_change(csr_addr_q3, sepc_d);
+                        riscv_pkg::CSR_MISA: csr_change(csr_addr_q3, def_pkg::ISA_CODE);
+                        default: csr_change(csr_addr_q3, csr_wdata);
+                    endcase
+                end
+            end
+        end
+        `else
         always_ff @(negedge clk_i) begin
             automatic logic [63:0] mstatus_fix, mstatus_clear ,mstatus_set;
 
@@ -1542,8 +1712,11 @@ module csr_bsc#(
                             riscv_pkg::XLEN_64 << 32|
                             riscv_pkg::XLEN_64 << 34;
             mstatus_fix = (mstatus_d & ~mstatus_clear) | mstatus_set;
-
+            `ifdef LOX
+            if (rstn_i & (|torture_dpi_we_i)) begin
+            `else
             if (rstn_i & (|retire_i)) begin
+            `endif
                 // CSRs which can change due to side-effects etc
 
                 // For some reason mstatus is updated in multiple cycles, but at commit we need the value that will be set later
@@ -1574,6 +1747,7 @@ module csr_bsc#(
                 end
             end
         end
+        `endif
     `endif
     `endif
 
