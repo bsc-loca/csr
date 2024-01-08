@@ -1,23 +1,25 @@
-/* -----------------------------------------------
-* Project Name   : DRAC
-* File           : hpm_counters.sv
-* Organization   : Barcelona Supercomputing Center
-* Author(s)      : Oscar Lostes Cazorla
-                   Narcis Rodas Quiroga
-* Email(s)       : oscar.lostes@bsc.es
-                   narcis.rodaquiroga@bsc.es
-* References     :
-* -----------------------------------------------
-* Revision History
-*  Revision   | Author     | Commit | Description
-*  0.1        | Oscar.LC   |
-*  0.2        | Narcis.RQ  |
-* -----------------------------------------------
+/*
+ * Copyright 2023 BSC*
+ * *Barcelona Supercomputing Center (BSC)
+ * 
+ * SPDX-License-Identifier: Apache-2.0 WITH SHL-2.1
+ * 
+ * Licensed under the Solderpad Hardware License v 2.1 (the “License”); you
+ * may not use this file except in compliance with the License, or, at your
+ * option, the Apache License version 2.0. You may obtain a copy of the
+ * License at
+ * 
+ * https://solderpad.org/licenses/SHL-2.1/
+ * 
+ * Unless required by applicable law or agreed to in writing, any work
+ * distributed under the License is distributed on an “AS IS” BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
 */
 
 // This module implements the Zihpm (v2.0) (previously known as "Counters") and Sscofpmf (v0.5.2) extensions
 module hpm_counters
-    import drac_pkg::*;
     import riscv_pkg::*;
 #(
     parameter CSR_ADDR_WIDTH = 12,
@@ -46,6 +48,8 @@ module hpm_counters
     output  logic           count_ovf_int_req_o,
     output  logic [31:3]    mhpm_ovf_bits_o 
 );
+    
+    assert (XLEN == 64); // 32 and 128 values not supported
     
     // HPM Counters
     logic [63:0] mhpmcounter_d[HPM_NUM_COUNTERS+3-1:3];
