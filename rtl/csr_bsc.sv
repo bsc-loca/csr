@@ -408,7 +408,6 @@ module csr_bsc#(
                 riscv_pkg::CSR_MHPM_COUNTER_29,
                 riscv_pkg::CSR_MHPM_COUNTER_30,
                 riscv_pkg::CSR_MHPM_COUNTER_31: begin
-                    perf_addr_o = csr_addr.address[11:0];
                     csr_rdata = perf_data_i;
                 end
 
@@ -477,7 +476,6 @@ module csr_bsc#(
                 riscv_pkg::CSR_MHPM_EVENT_29,
                 riscv_pkg::CSR_MHPM_EVENT_30,
                 riscv_pkg::CSR_MHPM_EVENT_31:   begin
-                    perf_addr_o = csr_addr.address[11:0];
                     csr_rdata = perf_data_i;
                 end
 

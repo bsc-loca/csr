@@ -49,7 +49,9 @@ module hpm_counters
     output  logic [31:3]    mhpm_ovf_bits_o 
 );
     
-    assert (XLEN == 64); // 32 and 128 values not supported
+    if (XLEN != 64) begin
+        $error("Only supported value for XLEN is 64");
+    end
     
     // HPM Counters
     logic [63:0] mhpmcounter_d[HPM_NUM_COUNTERS+3-1:3];
