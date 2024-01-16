@@ -62,7 +62,7 @@ module csr_bsc#(
     //PCR resp inputs
     input  logic                            pcr_resp_valid_i,           // ready bit of the pcr
     input  logic [word_width-1:0]           pcr_resp_data_i,            // read data from performance counter module
-    input  logic                            pcr_resp_core_id_i,         // core id of the tile that the date is sended
+    input  logic [word_width-1:0]           pcr_resp_core_id_i,         // core id of the tile that the date is sended
 
     //PCR outputs request
     output logic                            pcr_req_valid_o,            // valid bit to make a pcr request
@@ -74,7 +74,7 @@ module csr_bsc#(
     //PCR update inputs
     input  logic                            pcr_update_valid_i,
     input  logic                            pcr_update_broadcast_i,
-    input  logic                            pcr_update_core_id_i,
+    input  logic [word_width-1:0]           pcr_update_core_id_i,
     input  logic [csr_addr_width-1:0]       pcr_update_addr_i,
     input  logic [word_width-1:0]           pcr_update_data_i,
 
