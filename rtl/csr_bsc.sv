@@ -1594,6 +1594,7 @@ module csr_bsc#(
             mepc_q                 <= mepc_d;
             mcause_q               <= mcause_d;
             mcounteren_q           <= mcounteren_d;
+            mcountinhibit_q        <= mcountinhibit_d;
             mscratch_q             <= mscratch_d;
             mtval_q                <= mtval_d;
             // supervisor mode registers

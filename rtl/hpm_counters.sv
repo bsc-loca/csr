@@ -45,8 +45,8 @@ module hpm_counters
     // Events
     input logic [HPM_NUM_EVENTS:1] events_i,
     
-    output  logic           count_ovf_int_req_o,
-    output  logic [31:3]    mhpm_ovf_bits_o 
+    output  logic                          count_ovf_int_req_o,
+    output  logic [HPM_NUM_COUNTERS+3-1:3] mhpm_ovf_bits_o 
 );
     
     if (XLEN != 64) begin
