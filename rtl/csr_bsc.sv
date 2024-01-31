@@ -335,6 +335,7 @@ module csr_bsc#(
                     end else begin
                         csr_rdata = riscv_pkg::VLEN >> 3;
                     end
+                end
 
                 // debug registers
                 riscv_pkg::CSR_DCSR:               csr_rdata = 64'b0; // not implemented
