@@ -328,6 +328,13 @@ module csr_bsc#(
                         csr_rdata = vtype_q;
                     end
                 end
+                
+                riscv_pkg::CSR_VLENB: begin
+                    if (mstatus_q.vs == riscv_pkg::Off) begin
+                        read_access_exception = 1'b1;
+                    end else begin
+                        csr_rdata = riscv_pkg::VLEN >> 3;
+                    end
 
                 // debug registers
                 riscv_pkg::CSR_DCSR:               csr_rdata = 64'b0; // not implemented
@@ -1330,7 +1337,8 @@ module csr_bsc#(
 
         vtype_new = rw_addr_i[10:0];
         // new vlmax depending on the vtype config
-        vlmax = ((riscv_pkg::VLEN << vtype_new[1:0]) >> 3) >> vtype_new[4:2];
+        // vlmax = ((riscv_pkg::VLEN << vtype_new[1:0]) >> 3) >> vtype_new[4:2];
+        vlmax = (riscv_pkg::VLEN >> 3) >> vtype_new[5:3]; // We don't support LMUL != 1
         dirty_v_state_csr = 1'b0;
         update_access_exception_vs = 1'b0;
 
@@ -1357,7 +1365,7 @@ module csr_bsc#(
                     vl_d = vlmax;
                 end
                 // vtype assignation
-                if (vtype_new[10:4] != 6'b0) begin
+                if (vtype_new[10:8] != 3'b0 || vtype_new[2:0] != 3'b0) begin
                     vtype_d = {1'b1,63'b0};
                 end else begin
                     vtype_d = {'0,vtype_new};
@@ -1370,7 +1378,7 @@ module csr_bsc#(
         end
     end
 
-    assign vpu_csr_o = {vtype_q[63], vtype_q[4:0], fcsr_q[7:5], 2'b0, vl_q[14:0], 14'b0};
+    assign vpu_csr_o = {vtype_q[63], vtype_q[5:1], fcsr_q[7:5], 2'b0, vl_q[14:0], 14'b0};
 
     // ----------------------
     // CSR Exception Control
