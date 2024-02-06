@@ -108,7 +108,7 @@ module csr_bsc#(
     output logic [63:0]                     evec_o,                      // virtual address of the PC to execute after a Interrupt or exception
 
     output logic                            flush_o,                    // the core is executing a sfence.vm instruction and a tlb flush is needed
-    output logic [39:0]                     vpu_csr_o,
+    output logic [42:0]                     vpu_csr_o,
 
     output logic [csr_addr_width-1:0]       perf_addr_o,                // read/write address to performance counter module
     output logic [63:0]                     perf_data_o,                // write data to performance counter module
@@ -1379,7 +1379,7 @@ module csr_bsc#(
         end
     end
 
-    assign vpu_csr_o = {vtype_q[63], vtype_q[5:1], fcsr_q[7:5], 2'b0, vl_q[14:0], 14'b0};
+    assign vpu_csr_o = {vtype_q[63], vtype_q[7:0], fcsr_q[7:5], 2'b0, vl_q[14:0], 14'b0};
 
     // ----------------------
     // CSR Exception Control
