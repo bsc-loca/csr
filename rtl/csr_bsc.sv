@@ -30,6 +30,9 @@ module csr_bsc#(
     input logic                             rstn_i,
 
     input logic [word_width-1:0]            core_id_i,                  // hartid, for multicore systems
+    `ifdef PITON_CINCORANCH
+    input   logic [1:0]                     boot_main_id_i,             // CINCORANCH Specific boot id 
+    `endif  // Custom for CincoRanch
 
     // RW interface with the core
     input logic [csr_addr_width-1:0]        rw_addr_i,                  //read and write address form the core
@@ -384,6 +387,9 @@ module csr_bsc#(
                 riscv_pkg::CSR_MARCHID:            csr_rdata = 64'b0; // not implemented
                 riscv_pkg::CSR_MIMPID:             csr_rdata = 64'b0; // not implemented
                 riscv_pkg::CSR_MHARTID:            csr_rdata = core_id_i; 
+                `ifdef PITON_CINCORANCH
+                riscv_pkg::CSR_MBOOT_MAIN_ID:      csr_rdata = {62'b0, boot_main_id_i};
+                `endif  // Custom for CincoRanch
                 // Counters and Timers
                 riscv_pkg::CSR_MCYCLE:             csr_rdata = cycle_q;
                 riscv_pkg::CSR_MINSTRET:           csr_rdata = instret_q;
