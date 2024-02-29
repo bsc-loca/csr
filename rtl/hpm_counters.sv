@@ -61,7 +61,7 @@ module hpm_counters
     logic [63:0] mhpmevent_d[HPM_NUM_COUNTERS+3-1:3];
     logic [63:0] mhpmevent_q[HPM_NUM_COUNTERS+3-1:3];
     
-    logic [4:0] mhpmcounter_idx, mhpmevent_idx;
+    logic [12:0] mhpmcounter_idx, mhpmevent_idx;
     assign mhpmcounter_idx = addr_i - CSR_MHPM_COUNTER_3 + 12'd3;
     assign mhpmevent_idx   = addr_i - CSR_MHPM_EVENT_3   + 12'd3;
     
@@ -78,11 +78,11 @@ module hpm_counters
             // the counting of events in the current privilege mode is not disabled (mhpmeventX bit 62/61/60 is clear)
             // Hypervisor Extension (H) not supported (mhpmeventX bits 59 and 58)
             if (!mcountinhibit_i[i] && 
-               (!((priv_lvl_i == riscv_pkg::PRIV_LVL_M && mhpmevent_q[i][62]) ||
-               (priv_lvl_i    == riscv_pkg::PRIV_LVL_S && mhpmevent_q[i][61]) ||
-               (priv_lvl_i    == riscv_pkg::PRIV_LVL_U && mhpmevent_q[i][60])))) begin
+               (!(((priv_lvl_i == riscv_pkg::PRIV_LVL_M) && mhpmevent_q[i][62]) ||
+               ((priv_lvl_i    == riscv_pkg::PRIV_LVL_S) && mhpmevent_q[i][61]) ||
+               ((priv_lvl_i    == riscv_pkg::PRIV_LVL_U) && mhpmevent_q[i][60])))) begin
                 // mhpmeventX[55:0] is the position (in the input vector) of the event to be counted in mhpmcounterX (mhpmeventX[55:0] == 0 means "no event")
-                if (mhpmevent_q[i][55:0] > 0 && mhpmevent_q[i][55:0] <= HPM_NUM_EVENTS) begin
+                if ((mhpmevent_q[i][55:0] > 0) && (mhpmevent_q[i][55:0] <= HPM_NUM_EVENTS)) begin
                     mhpmcounter_d[i] = mhpmcounter_q[i] + events_i[mhpmevent_q[i][55:0]];
                     // Check overflow of counter and overflow status
                     if ((mhpmcounter_d[i] < mhpmcounter_q[i]) && !mhpmevent_q[i][63]) begin

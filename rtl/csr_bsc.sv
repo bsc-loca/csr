@@ -19,30 +19,30 @@
  */
 
 module csr_bsc#(
-    parameter word_width = 64,
-    parameter paddr_width = 32,
-    parameter csr_addr_width = 12,
-    parameter boot_addr = 'h100,
-    parameter AsidWidth = 13,
+    parameter WORD_WIDTH = 64,
+    parameter PPN_WIDTH = 20,
+    parameter CSR_ADDR_WIDTH = 12,
+    parameter BOOT_ADDR = 'h100,
+    parameter ASID_WIDTH = 13,
     parameter RETIRE_BW = 2
 )(
     input logic                             clk_i,
     input logic                             rstn_i,
 
-    input logic [word_width-1:0]            core_id_i,                  // hartid, for multicore systems
+    input logic [WORD_WIDTH-1:0]            core_id_i,                    // hartid, for multicore systems
     `ifdef PITON_CINCORANCH
     input   logic [1:0]                     boot_main_id_i,             // CINCORANCH Specific boot id 
     `endif  // Custom for CincoRanch
 
     // RW interface with the core
-    input logic [csr_addr_width-1:0]        rw_addr_i,                  //read and write address form the core
+    input logic [CSR_ADDR_WIDTH-1:0]        rw_addr_i,                  //read and write address form the core
     input logic [3:0]                       rw_cmd_i,                   //specific operation to execute from the core 
-    input logic [word_width-1:0]            w_data_core_i,              //write data from the core
-    output logic [word_width-1:0]           r_data_core_o,              // read data to the core, address specified with the rw_addr_i
+    input logic [WORD_WIDTH-1:0]            w_data_core_i,              //write data from the core
+    output logic [WORD_WIDTH-1:0]           r_data_core_o,              // read data to the core, address specified with the rw_addr_i
 
     //Exceptions 
     input logic                             ex_i,                       // exception produced in the core
-    input logic [word_width-1:0]            ex_cause_i,                 //cause of the exception
+    input logic [WORD_WIDTH-1:0]            ex_cause_i,                 //cause of the exception
     input logic [63:0]                      pc_i,                       //pc were the exception is produced
 
     input logic [RETIRE_BW-1:0]             retire_i,                   // shows if a instruction is retired from the core.
@@ -54,36 +54,28 @@ module csr_bsc#(
     `endif
 
     //Interruptions
-    input logic                             rocc_interrupt_i,           // interrupt from the Rocc module
     input logic                             time_irq_i,                 // timer interrupt
     input logic                             irq_i,                      // external interrupt in
     input logic                             m_soft_irq_i,               // Machine software interrupt form the axi module
     output logic                            interrupt_o,                // Inerruption wire to the core
-    output logic [word_width-1:0]           interrupt_cause_o,          // Interruption cause
+    output logic [WORD_WIDTH-1:0]           interrupt_cause_o,          // Interruption cause
 
-    input  logic [word_width-1:0]           time_i,                    // time passed since the core is reset
+    input  logic [WORD_WIDTH-1:0]           time_i,                    // time passed since the core is reset
 
     //PCR req inputs
     input  logic                            pcr_req_ready_i,            // ready bit of the pcr
 
     //PCR resp inputs
     input  logic                            pcr_resp_valid_i,           // ready bit of the pcr
-    input  logic [word_width-1:0]           pcr_resp_data_i,            // read data from performance counter module
-    input  logic [word_width-1:0]           pcr_resp_core_id_i,         // core id of the tile that the date is sended
+    input  logic [WORD_WIDTH-1:0]           pcr_resp_data_i,            // read data from performance counter module
+    input  logic [WORD_WIDTH-1:0]           pcr_resp_core_id_i,         // core id of the tile that the date is sended
 
     //PCR outputs request
     output logic                            pcr_req_valid_o,            // valid bit to make a pcr request
-    output logic  [csr_addr_width-1:0]      pcr_req_addr_o,             // read/write address to performance counter module (up to 29 aux counters possible in riscv encoding.h)
+    output logic  [CSR_ADDR_WIDTH-1:0]      pcr_req_addr_o,             // read/write address to performance counter module (up to 29 aux counters possible in riscv encoding.h)
     output logic  [63:0]                    pcr_req_data_o,             // write data to performance counter module
     output logic  [2:0]                     pcr_req_we_o,               // Cmd of the petition
-    output logic  [word_width-1:0]          pcr_req_core_id_o,          // core id of the tile
-
-    //PCR update inputs
-    input  logic                            pcr_update_valid_i,
-    input  logic                            pcr_update_broadcast_i,
-    input  logic [word_width-1:0]           pcr_update_core_id_i,
-    input  logic [csr_addr_width-1:0]       pcr_update_addr_i,
-    input  logic [word_width-1:0]           pcr_update_data_i,
+    output logic  [WORD_WIDTH-1:0]          pcr_req_core_id_o,          // core id of the tile
 
     // floating point flags
     input logic                             fcsr_flags_valid_i,
@@ -100,20 +92,20 @@ module csr_bsc#(
     output logic [63:0]                     csr_tval_o,                 // Value written to the tval registers
     output logic                            eret_o,
 
-    output logic [word_width-1:0]           status_o,                   //actual mstatus of the core
+    output logic [WORD_WIDTH-1:0]           status_o,                   //actual mstatus of the core
     output logic [1:0]                      priv_lvl_o,                 // actual privialge level of the core
     output logic [1:0]                      ld_st_priv_lvl_o,
     output logic                            en_ld_st_translation_o,
     output logic                            en_translation_o,
 
-    output logic [paddr_width-1:0]          satp_ppn_o,                 // Page table base pointer for the PTW
+    output logic [PPN_WIDTH-1:0]             satp_ppn_o,                 // Page table base pointer for the PTW
 
     output logic [63:0]                     evec_o,                      // virtual address of the PC to execute after a Interrupt or exception
 
     output logic                            flush_o,                    // the core is executing a sfence.vm instruction and a tlb flush is needed
     output logic [42:0]                     vpu_csr_o,
 
-    output logic [csr_addr_width-1:0]       perf_addr_o,                // read/write address to performance counter module
+    output logic [CSR_ADDR_WIDTH-1:0]       perf_addr_o,                // read/write address to performance counter module
     output logic [63:0]                     perf_data_o,                // write data to performance counter module
     input  logic [63:0]                     perf_data_i,                // read data from performance counter module
     output logic                            perf_we_o,
@@ -123,6 +115,10 @@ module csr_bsc#(
 );
 
     localparam int MHPM_TO_HPM_DIST = riscv_pkg::CSR_HPM_COUNTER_3 - riscv_pkg::CSR_MHPM_COUNTER_3;
+
+    function [5:0] trunc_sum_6bits(input [6:0] val_in);
+        trunc_sum_6bits = val_in[5:0];
+    endfunction
 
     //////////////////////////////////////////////
     // Registers declaration
@@ -194,7 +190,8 @@ module csr_bsc#(
     // instruction wires
     logic insn_call;
     logic insn_break; 
-    logic insn_ret;
+    logic insn_mret;
+    logic insn_sret;
     logic insn_sfence_vm; 
     logic insn_wfi;
 
@@ -211,7 +208,6 @@ module csr_bsc#(
     logic pcr_addr_valid; // the address requested is a pcr address.
 
     //interruption wires
-    logic cond_m_int, cond_s_int;
     logic [63:0] interrupt_cause_q, interrupt_cause_d, interrupt_cause;
     logic interrupt_d, interrupt_q;
     logic global_enable;
@@ -229,17 +225,17 @@ module csr_bsc#(
     assign system_insn = (rw_cmd_i == 4'b0100) ? 1'b1 : 1'b0;
     assign priv_sufficient = priv_lvl_q >= rw_addr_i[9:8];
     // the instructions are codified using the rw_addr_i
-    assign insn_call = (10'b0000000000 == rw_addr_i[9:0] && system_insn) ? 1'b1 : 1'b0;
-    assign insn_break = (10'b0000000001 == rw_addr_i[9:0] && system_insn) ? 1'b1 : 1'b0;
-    assign insn_mret =  (10'b1100000010 == rw_addr_i[9:0] && system_insn && priv_sufficient) ? 1'b1 : 1'b0;
-    assign insn_sret =  (10'b0100000010 == rw_addr_i[9:0] && system_insn && priv_sufficient) ? 1'b1 : 1'b0;
-    assign insn_sfence_vm = (5'b01001 == rw_addr_i[9:5] && system_insn && priv_sufficient) ? 1'b1 : 1'b0;
-    assign insn_wfi = (10'b0100000101 == rw_addr_i[9:0] && system_insn && priv_sufficient) ? 1'b1 : 1'b0;
+    assign insn_call = ((10'b0000000000 == rw_addr_i[9:0]) && system_insn) ? 1'b1 : 1'b0;
+    assign insn_break = ((10'b0000000001 == rw_addr_i[9:0]) && system_insn) ? 1'b1 : 1'b0;
+    assign insn_mret =  ((10'b1100000010 == rw_addr_i[9:0]) && system_insn && priv_sufficient) ? 1'b1 : 1'b0;
+    assign insn_sret =  ((10'b0100000010 == rw_addr_i[9:0]) && system_insn && priv_sufficient) ? 1'b1 : 1'b0;
+    assign insn_sfence_vm = ((5'b01001 == rw_addr_i[9:5]) && system_insn && priv_sufficient) ? 1'b1 : 1'b0;
+    assign insn_wfi = ((10'b0100000101 == rw_addr_i[9:0]) && system_insn && priv_sufficient) ? 1'b1 : 1'b0;
 
     //////////////////////////////////////////////
     // Vector Instructions Decode
     //////////////////////////////////////////////
-    assign vsetvl_insn = (rw_cmd_i == 4'b0110 || rw_cmd_i == 4'b0111) ? 1'b1 : 1'b0;
+    assign vsetvl_insn = ((rw_cmd_i == 4'b0110) || (rw_cmd_i == 4'b0111)) ? 1'b1 : 1'b0;
 
     //////////////////////////////////////////////
     // VPU Instructions Decode
@@ -364,7 +360,7 @@ module csr_bsc#(
                 riscv_pkg::CSR_STVAL:              csr_rdata = stval_q;
                 riscv_pkg::CSR_SATP: begin
                     // intercept reads to SATP if in S-Mode and TVM is enabled
-                    if (priv_lvl_o == riscv_pkg::PRIV_LVL_S && mstatus_q.tvm) begin
+                    if ((priv_lvl_o == riscv_pkg::PRIV_LVL_S) && mstatus_q.tvm) begin
                         read_access_exception = 1'b1;
                     end else begin
                         csr_rdata = satp_q;
@@ -585,7 +581,7 @@ module csr_bsc#(
     // ---------------------------
     logic [63:0] mask;
     always_comb begin : csr_update
-        automatic riscv_pkg::satp_t sapt,sapt_temp; // temporal values to correct the structure of the writing on the sapt reg
+        automatic riscv_pkg::satp_t satp,satp_temp; // temporal values to correct the structure of the writing on the satp reg
         automatic logic [63:0] instret;
         automatic logic [63:0] mstatus_int, mstatus_clear ,mstatus_set; //Used to set and clear some bits of the mstatus_d
         automatic logic flush; //temporal flush value befor the exceptions logic
@@ -596,7 +592,7 @@ module csr_bsc#(
         automatic logic [63:0] mepc_int; // temporal value of mepc
         automatic logic [63:0] sepc_int; // temporal value of sepc
 
-        sapt = satp_q;
+        satp = satp_q;
         instret = instret_q;
 
         // --------------------
@@ -610,11 +606,11 @@ module csr_bsc#(
         end
 
         if (!ex_i && ~mcountinhibit_q[2])  begin 
-            instret = instret + retire_cnt;
+            instret = instret + {{(64-$clog2(RETIRE_BW+1)){1'b0}},retire_cnt};
         end
         instret_d = instret;
         // increment the cycle count 
-        cycle_d = cycle_q + 1'(~mcountinhibit_q[0]);
+        cycle_d = cycle_q + {63'b0,~mcountinhibit_q[0]};
         
         scountovf_d = {perf_mhpm_ovf_bits_i, 3'b000};
 
@@ -630,10 +626,11 @@ module csr_bsc#(
         priv_lvl_d              = priv_lvl_q;
 
         mstatus_clear = riscv_pkg::MSTATUS_UXL | riscv_pkg::MSTATUS_SXL | riscv_pkg::MSTATUS64_SD;
-        mstatus_set =   ((mstatus_q.xs == riscv_pkg::Dirty) | (mstatus_q.fs == riscv_pkg::Dirty) | (mstatus_q.vs == riscv_pkg::Dirty))<<63 |
-                        riscv_pkg::XLEN_64 << 32|
-                        riscv_pkg::XLEN_64 << 34;
-        mstatus_int   = (mstatus_q & ~mstatus_clear)| mstatus_set;
+        mstatus_set =   (((mstatus_q.xs == riscv_pkg::Dirty) || (mstatus_q.fs == riscv_pkg::Dirty) || (mstatus_q.vs == riscv_pkg::Dirty))<<63) |
+                        {30'b0,riscv_pkg::XLEN_64,32'b0} |
+                        {28'b0,riscv_pkg::XLEN_64,34'b0};
+        mstatus_int   = (mstatus_q & ~mstatus_clear) | mstatus_set;
+
 
         // hardwired extension registers
 
@@ -645,21 +642,25 @@ module csr_bsc#(
 
         // check whether we come out of reset
         // this is a workaround. some tools have issues
-        // having boot_addr_i in the asynchronous
+        // having BOOT_ADDR_i in the asynchronous
         // reset assignment to mtvec_d, even though
-        // boot_addr_i will be assigned a constant
+        // BOOT_ADDR_i will be assigned a constant
         // on the top-level.
+        mtvec_d = mtvec_q;
         if (mtvec_rst_load_q) begin
-            mtvec_d             = boot_addr + 'h40;
-        end else begin
-            mtvec_d             = mtvec_q;
-        end
+            mtvec_d             = BOOT_ADDR + 'h40;
+        end 
+
+        dirty_v_state_csr = 1'b0;
+        if (vsetvl_insn && (mstatus_q.vs != riscv_pkg::Off)) begin
+            dirty_v_state_csr = 1'b1;
+        end 
 
         // ---------------------
         // External Interrupts
         // ---------------------
         // the IRQ_M_EXT = irq_i || rocc_interrupt_i, IRQ_M_SOFT = m_soft_irq_i and IRQ_M_TIMER = time_irq_i
-        mip_d = {mip_q[63:14], perf_count_ovf_int_req_i || mip_q[13], mip_q[12], irq_i || rocc_interrupt_i, mip_q[10:8], time_irq_i, mip_q[6:4], m_soft_irq_i, mip_q[2:0]};
+        mip_d = {mip_q[63:14], perf_count_ovf_int_req_i || mip_q[13], mip_q[12], irq_i, mip_q[10:8], time_irq_i, mip_q[6:4], m_soft_irq_i, mip_q[2:0]};
 
 
 
@@ -685,6 +686,8 @@ module csr_bsc#(
         en_ld_st_translation_d  = en_ld_st_translation_q;
         dirty_fp_state_csr      = 1'b0;
         pcr_req_data_o          = 'b0;
+        mask                    = 64'h0;
+        satp_temp='0;
 
         // check for correct access rights and that we are writing
         if (csr_we) begin
@@ -799,16 +802,16 @@ module csr_bsc#(
                 // supervisor address translation and protection
                 riscv_pkg::CSR_SATP: begin
                     // intercept SATP writes if in S-Mode and TVM is enabled
-                    if (priv_lvl_o == riscv_pkg::PRIV_LVL_S && mstatus_q.tvm)
+                    if ((priv_lvl_o == riscv_pkg::PRIV_LVL_S) && mstatus_q.tvm)
                         update_access_exception = 1'b1;
                     else begin
-                        sapt_temp      = riscv_pkg::satp_t'(csr_wdata);
+                        satp_temp      = riscv_pkg::satp_t'(csr_wdata);
                         // only make ASID_LEN - 1 bit stick, that way software can figure out how many ASID bits are supported
-                        sapt.asid = sapt_temp.asid & {{(16-AsidWidth){1'b0}}, {AsidWidth{1'b1}}};
-                        sapt.mode = sapt_temp.mode;
-                        sapt.ppn = sapt_temp.ppn;
+                        satp.asid = satp_temp.asid & {{(16-ASID_WIDTH){1'b0}}, {ASID_WIDTH{1'b1}}};
+                        satp.mode = satp_temp.mode;
+                        satp.ppn = satp_temp.ppn;
                         // only update if we actually support this mode
-                        if (sapt.mode == def_pkg::MODE_OFF || sapt.mode == def_pkg::MODE_SV39) satp_d = sapt;
+                        if ((satp.mode == def_pkg::MODE_OFF) || (satp.mode == def_pkg::MODE_SV39)) satp_d = satp;
                     end
                     // changing the mode can have side-effects on address translation (e.g.: other instructions), re-fetch
                     // the next instruction by executing a flush
@@ -1050,7 +1053,7 @@ module csr_bsc#(
                 riscv_pkg::CSR_PMPADDR_15:;
                 default: update_access_exception = 1'b1;
             endcase
-        end
+        end 
 
         // assign the temporal value to _d values to avoid multiples assign in the same cicle
         mstatus_d   = mstatus_int;
@@ -1122,15 +1125,15 @@ module csr_bsc#(
         end
         
         // if the priv is different of M or the mie is 1, the interrups are enable
-        global_enable = ((mstatus_q.mie & (priv_lvl_o == riscv_pkg::PRIV_LVL_M))
-                                    | (priv_lvl_o != riscv_pkg::PRIV_LVL_M));
+        global_enable = ((mstatus_q.mie && (priv_lvl_o == riscv_pkg::PRIV_LVL_M))
+                                    || (priv_lvl_o != riscv_pkg::PRIV_LVL_M));
 
         if (interrupt_cause[63] && global_enable) begin
             // However, if bit i in mideleg is set, interrupts are considered to be globally enabled if the hart’s current privilege
             // mode equals the delegated privilege mode (S or U) and that mode’s interrupt enable bit
             // (SIE or UIE in mstatus) is set, or if the current privilege mode is less than the delegated privilege mode.
             if (mideleg_q[interrupt_cause[5:0]]) begin
-                if ((mstatus_q.sie && priv_lvl_q == riscv_pkg::PRIV_LVL_S) || priv_lvl_q == riscv_pkg::PRIV_LVL_U) begin
+                if ((mstatus_q.sie && (priv_lvl_q == riscv_pkg::PRIV_LVL_S)) || (priv_lvl_q == riscv_pkg::PRIV_LVL_U)) begin
                     interrupt_d = 1'b1;
                     interrupt_cause_d = interrupt_cause;
                 end
@@ -1168,9 +1171,9 @@ module csr_bsc#(
                                     riscv_pkg::LD_PAGE_FAULT, riscv_pkg::ST_AMO_PAGE_FAULT,
                                     riscv_pkg::INSTR_PAGE_FAULT, riscv_pkg::INSTR_ADDR_MISALIGNED}) begin
                 ex_tval = w_data_core_i;
-            end else if ((ex_i && ex_cause_i == riscv_pkg::ILLEGAL_INSTR) || (csr_xcpt && csr_xcpt_cause == riscv_pkg::ILLEGAL_INSTR)) begin
+            end else if ((ex_i && (ex_cause_i == riscv_pkg::ILLEGAL_INSTR)) || (csr_xcpt && (csr_xcpt_cause == riscv_pkg::ILLEGAL_INSTR))) begin
                 ex_tval = 64'b0;
-	    end else if (csr_xcpt && csr_xcpt_cause == riscv_pkg::BREAKPOINT) begin
+	    end else if (csr_xcpt && (csr_xcpt_cause == riscv_pkg::BREAKPOINT)) begin
                 ex_tval = pc_i;
             end else begin
                 ex_tval = 64'b0;
@@ -1236,7 +1239,7 @@ module csr_bsc#(
             mstatus_d.mpp  = riscv_pkg::PRIV_LVL_U;
             // set mpie to 1
             mstatus_d.mpie = 1'b1;
-        end else if (sret && !(priv_lvl_q == riscv_pkg::PRIV_LVL_S && mstatus_q.tsr == 1'b1)) begin
+        end else if (sret && !((priv_lvl_q == riscv_pkg::PRIV_LVL_S) && (mstatus_q.tsr == 1'b1))) begin
             // return from exception, IF doesn't care from where we are returning
             eret_o = 1'b1;
             // return the previous supervisor interrupt enable flag
@@ -1254,7 +1257,7 @@ module csr_bsc#(
         // ------------------------------
         // Set the address translation at which the load and stores should occur
         // we can use the previous values since changing the address translation will always involve a pipeline flush
-        if (mprv && satp_q.mode == def_pkg::MODE_SV39 && (mstatus_q.mpp != riscv_pkg::PRIV_LVL_M)) begin
+        if (mprv && (satp_q.mode == def_pkg::MODE_SV39) && (mstatus_q.mpp != riscv_pkg::PRIV_LVL_M)) begin
             en_ld_st_translation_d = 1'b1;
         end else begin // otherwise we go with the regular settings
             en_ld_st_translation_d = en_translation_o;
@@ -1266,8 +1269,6 @@ module csr_bsc#(
 	en_ld_st_translation_o = en_ld_st_translation_q;
         
     end
-
-    assign csr_tval_o = ex_tval;
 
     // ---------------------------
     // CSR OP Select Logic
@@ -1331,9 +1332,10 @@ module csr_bsc#(
             end
         end
         //checks the level of the system instruction or sfence with tvm = 1 or sret and tsr = 1
-        if (system_insn && !priv_sufficient || insn_sfence_vm && priv_lvl_q == riscv_pkg::PRIV_LVL_S && mstatus_q.tvm == 1'b1
-            || insn_sret && priv_lvl_q == riscv_pkg::PRIV_LVL_S && mstatus_q.tsr == 1'b1) begin
-             privilege_violation = 1'b1;
+        if ((system_insn && !priv_sufficient) || 
+            ((insn_sfence_vm && (priv_lvl_q == riscv_pkg::PRIV_LVL_S)) && (mstatus_q.tvm == 1'b1)) || 
+            ((insn_sret && (priv_lvl_q == riscv_pkg::PRIV_LVL_S)) && (mstatus_q.tsr == 1'b1))) begin
+            privilege_violation = 1'b1;
         end
     end
 
@@ -1346,7 +1348,6 @@ module csr_bsc#(
         // new vlmax depending on the vtype config
         // vlmax = ((riscv_pkg::VLEN << vtype_new[1:0]) >> 3) >> vtype_new[4:2];
         vlmax = (riscv_pkg::VLEN >> 3) >> vtype_new[5:3]; // We don't support LMUL != 1
-        dirty_v_state_csr = 1'b0;
         update_access_exception_vs = 1'b0;
 
         if (vsetvl_insn) begin
@@ -1356,7 +1357,6 @@ module csr_bsc#(
                 vl_d = vl_q;
                 vtype_d = vtype_q;
             end else begin
-                dirty_v_state_csr = 1'b1;
                 // vl assignation depending on the AVL respect VLMAX
                 if (rw_cmd_i == 3'b111) begin //vsetvl with x0
                     if (w_data_core_i == 64'b1) begin
@@ -1367,12 +1367,12 @@ module csr_bsc#(
                 end else if (vlmax >= w_data_core_i) begin
                     vl_d = w_data_core_i;
                 end else if ((vlmax<<1) >= w_data_core_i) begin
-                    vl_d = w_data_core_i>>1 + w_data_core_i[0];
+                    vl_d = (w_data_core_i>>1) + w_data_core_i[0];
                 end else begin
                     vl_d = vlmax;
                 end
                 // vtype assignation
-                if (vtype_new[10:8] != 3'b0 || vtype_new[2:0] != 3'b0) begin
+                if ((vtype_new[10:8] != 3'b0) || (vtype_new[2:0] != 3'b0)) begin
                     vtype_d = {1'b1,63'b0};
                 end else begin
                     vtype_d = {'0,vtype_new};
@@ -1392,7 +1392,7 @@ module csr_bsc#(
     // ----------------------
     assign csr_xcpt_o = csr_xcpt;
     assign csr_xcpt_cause_o = csr_xcpt_cause;
-    assign tval_o = ex_tval;
+    assign csr_tval_o = ex_tval;
 
     always_comb begin : exception_ctrl
         csr_xcpt_cause = 64'b0;
@@ -1429,7 +1429,7 @@ module csr_bsc#(
         // wait for interrupt register
         wfi_d = wfi_q;
         // if there is any interrupt pending un-stall the core
-        if (|mip_q || irq_i) begin
+        if ((|mip_q) || irq_i) begin
             wfi_d = 1'b0;
         // or alternatively if there is no exception pending and we are not in debug mode wait here
         // for the interrupt
@@ -1456,12 +1456,12 @@ module csr_bsc#(
         pcr_req_valid = cpu_ren & pcr_addr_valid & priv_sufficient & ~csr_xcpt & ~pcr_wait_resp_d;
         
 
-        if (pcr_req_valid && (!pcr_resp_valid_i || pcr_resp_core_id_i != core_id_i )) pcr_wait_resp_d = 1'b1;
-        else if (pcr_resp_valid_i && pcr_resp_core_id_i == core_id_i) pcr_wait_resp_d = 1'b0;
-        
+        if (pcr_req_valid && (!pcr_resp_valid_i || (pcr_resp_core_id_i != core_id_i))) pcr_wait_resp_d = 1'b1;
+        else if (pcr_resp_valid_i && (pcr_resp_core_id_i == core_id_i)) pcr_wait_resp_d = 1'b0;
+
         //pcr requests outputs connections
         pcr_req_addr_o = csr_addr;
-        pcr_req_we_o = rw_cmd_i;
+        pcr_req_we_o = rw_cmd_i[2:0];
         pcr_req_core_id_o = core_id_i;
         pcr_req_valid_o = pcr_req_valid;
     end
@@ -1470,21 +1470,21 @@ module csr_bsc#(
     // CPU actions induced by the csr
     // -------------------
     assign csr_replay_o = pcr_req_valid & !pcr_req_ready_i; // pcr write but not ready
-    assign csr_stall_o = wfi_q | // or waiting pcr response 
-                  (pcr_wait_resp_d & (~pcr_resp_valid_i | pcr_resp_core_id_i != core_id_i));
+    assign csr_stall_o = wfi_q || // or waiting pcr response 
+                  (pcr_wait_resp_d && (!pcr_resp_valid_i || (pcr_resp_core_id_i != core_id_i)));
 
 
     // output assignments dependent on privilege mode
     always_comb begin : priv_output
         // vectorized trap addres
         trap_vector_base[63:8] = mtvec_q[63:8];
-        trap_vector_base[7:2] = (mtvec_q[1:0] == 2'b0 || csr_xcpt || !ex_cause_i[63]) ? mtvec_q[7:2] : csr_xcpt ? (mtvec_q[7:2] + csr_xcpt_cause[5:0]) : (mtvec_q[7:2] + ex_cause_i[5:0]);
+        trap_vector_base[7:2] = ((mtvec_q[1:0] == 2'b0) || csr_xcpt || !ex_cause_i[63]) ? mtvec_q[7:2] : csr_xcpt ? trunc_sum_6bits(mtvec_q[7:2] + csr_xcpt_cause[5:0]) : trunc_sum_6bits(mtvec_q[7:2] + ex_cause_i[5:0]);
         trap_vector_base[1:0] = 2'b0;
         // output user mode stvec
         if (trap_to_priv_lvl == riscv_pkg::PRIV_LVL_S) begin
             // vectorized trap addres
             trap_vector_base[63:8] = stvec_q[63:8];
-            trap_vector_base[7:2] = (stvec_q[1:0] == 2'b0 || csr_xcpt || !ex_cause_i[63]) ? stvec_q[7:2] : csr_xcpt ? (mtvec_q[7:2] + csr_xcpt_cause[5:0]) : (mtvec_q[7:2] + ex_cause_i[5:0]);
+            trap_vector_base[7:2] = ((stvec_q[1:0] == 2'b0) || csr_xcpt || !ex_cause_i[63]) ? stvec_q[7:2] : csr_xcpt ? trunc_sum_6bits(mtvec_q[7:2] + csr_xcpt_cause[5:0]) : trunc_sum_6bits(mtvec_q[7:2] + ex_cause_i[5:0]);
             trap_vector_base[1:0] = 2'b0;
         end
 
@@ -1533,10 +1533,10 @@ module csr_bsc#(
 
 
     // MMU outputs 
-    assign satp_ppn_o       = satp_q.ppn;
+    assign satp_ppn_o       = satp_q.ppn[PPN_WIDTH-1:0];
 
     // we support bare memory addressing and SV39
-    assign en_translation_o = (satp_q.mode == 4'h8 && priv_lvl_o != riscv_pkg::PRIV_LVL_M)
+    assign en_translation_o = ((satp_q.mode == 4'h8) && (priv_lvl_o != riscv_pkg::PRIV_LVL_M))
                               ? 1'b1
                               : 1'b0;
 
