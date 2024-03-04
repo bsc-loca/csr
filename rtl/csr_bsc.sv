@@ -116,8 +116,20 @@ module csr_bsc#(
 
     localparam int MHPM_TO_HPM_DIST = riscv_pkg::CSR_HPM_COUNTER_3 - riscv_pkg::CSR_MHPM_COUNTER_3;
 
+    function [1:0] trunc_sum_2bits(input [2:0] val_in);
+        trunc_sum_2bits = val_in[1:0];
+    endfunction
+
     function [5:0] trunc_sum_6bits(input [6:0] val_in);
         trunc_sum_6bits = val_in[5:0];
+    endfunction
+
+    function [11:0] trunc_sum_12bits(input [12:0] val_in);
+        trunc_sum_12bits = val_in[11:0];
+    endfunction
+
+    function [63:0] trunc_sum_64bits(input [64:0] val_in);
+        trunc_sum_64bits = val_in[63:0];
     endfunction
 
     //////////////////////////////////////////////
@@ -252,7 +264,7 @@ module csr_bsc#(
     // ----------------
 
     assign perf_mcountinhibit_o = mcountinhibit_q;
-    assign perf_addr_o = csr_addr.address[11:0] - perf_addr_dist;
+    assign perf_addr_o = trunc_sum_12bits(csr_addr.address[11:0] - perf_addr_dist);
 
     // ----------------
     // CSR Read logic
@@ -602,15 +614,15 @@ module csr_bsc#(
 
         retire_cnt = {$clog2(RETIRE_BW+1){1'b0}};
         for (int i=0; i<RETIRE_BW; i++) begin
-            retire_cnt += retire_i[i];
+            retire_cnt = trunc_sum_2bits(retire_cnt + retire_i[i]);
         end
 
         if (!ex_i && ~mcountinhibit_q[2])  begin 
-            instret = instret + {{(64-$clog2(RETIRE_BW+1)){1'b0}},retire_cnt};
+            instret = trunc_sum_64bits(instret + {{(64-$clog2(RETIRE_BW+1)){1'b0}},retire_cnt});
         end
         instret_d = instret;
         // increment the cycle count 
-        cycle_d = cycle_q + {63'b0,~mcountinhibit_q[0]};
+        cycle_d = trunc_sum_64bits(cycle_q + {63'b0,~mcountinhibit_q[0]});
         
         scountovf_d = {perf_mhpm_ovf_bits_i, 3'b000};
 
