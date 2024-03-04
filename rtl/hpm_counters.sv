@@ -48,7 +48,22 @@ module hpm_counters
     output  logic                          count_ovf_int_req_o,
     output  logic [HPM_NUM_COUNTERS+3-1:3] mhpm_ovf_bits_o 
 );
-    
+
+    localparam HPM_NUM_EVENTS_BITS   = $clog2(HPM_NUM_EVENTS);
+    localparam HPM_NUM_COUNTERS_BITS = $clog2(HPM_NUM_COUNTERS);
+
+    function [63:0] trunc_sum_64bits(input [64:0] val_in);
+        trunc_sum_64bits = val_in[63:0];
+    endfunction
+
+    function [HPM_NUM_COUNTERS_BITS-1:0] trunc_counter_idx(input [CSR_ADDR_WIDTH:0] val_in);
+        trunc_counter_idx = val_in[HPM_NUM_COUNTERS_BITS-1:0];
+    endfunction
+
+    function [HPM_NUM_EVENTS_BITS-1:0] trunc_event_idx(input [CSR_ADDR_WIDTH:0] val_in);
+        trunc_event_idx = val_in[HPM_NUM_EVENTS_BITS-1:0];
+    endfunction
+
     if (XLEN != 64) begin
         $error("Only supported value for XLEN is 64");
     end
@@ -61,9 +76,10 @@ module hpm_counters
     logic [63:0] mhpmevent_d[HPM_NUM_COUNTERS+3-1:3];
     logic [63:0] mhpmevent_q[HPM_NUM_COUNTERS+3-1:3];
     
-    logic [12:0] mhpmcounter_idx, mhpmevent_idx;
-    assign mhpmcounter_idx = addr_i - CSR_MHPM_COUNTER_3 + 12'd3;
-    assign mhpmevent_idx   = addr_i - CSR_MHPM_EVENT_3   + 12'd3;
+    logic [HPM_NUM_COUNTERS_BITS-1:0] mhpmcounter_idx;
+    logic [HPM_NUM_EVENTS_BITS-1:0]   mhpmevent_idx;
+    assign mhpmcounter_idx = trunc_counter_idx(addr_i - CSR_MHPM_COUNTER_3 + 12'd3);
+    assign mhpmevent_idx   = trunc_event_idx  (addr_i - CSR_MHPM_EVENT_3   + 12'd3);
     
     always_comb begin
         mhpmcounter_d = mhpmcounter_q;
@@ -83,7 +99,7 @@ module hpm_counters
                ((priv_lvl_i    == riscv_pkg::PRIV_LVL_U) && mhpmevent_q[i][60])))) begin
                 // mhpmeventX[55:0] is the position (in the input vector) of the event to be counted in mhpmcounterX (mhpmeventX[55:0] == 0 means "no event")
                 if ((mhpmevent_q[i][55:0] > 0) && (mhpmevent_q[i][55:0] <= HPM_NUM_EVENTS)) begin
-                    mhpmcounter_d[i] = mhpmcounter_q[i] + events_i[mhpmevent_q[i][55:0]];
+                    mhpmcounter_d[i] = trunc_sum_64bits(mhpmcounter_q[i] + events_i[mhpmevent_q[i][HPM_NUM_EVENTS_BITS-1:0]]);
                     // Check overflow of counter and overflow status
                     if ((mhpmcounter_d[i] < mhpmcounter_q[i]) && !mhpmevent_q[i][63]) begin
                         mhpmevent_d[i][63] = 1'b1;
