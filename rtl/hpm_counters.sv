@@ -50,7 +50,7 @@ module hpm_counters
 );
 
     localparam HPM_NUM_EVENTS_BITS   = $clog2(HPM_NUM_EVENTS);
-    localparam HPM_NUM_COUNTERS_BITS = $clog2(HPM_NUM_COUNTERS);
+    localparam HPM_NUM_COUNTERS_BITS = $clog2(HPM_NUM_COUNTERS+3);
 
     function [63:0] trunc_sum_64bits(input [64:0] val_in);
         trunc_sum_64bits = val_in[63:0];
@@ -60,8 +60,8 @@ module hpm_counters
         trunc_counter_idx = val_in[HPM_NUM_COUNTERS_BITS-1:0];
     endfunction
 
-    function [HPM_NUM_EVENTS_BITS-1:0] trunc_event_idx(input [CSR_ADDR_WIDTH:0] val_in);
-        trunc_event_idx = val_in[HPM_NUM_EVENTS_BITS-1:0];
+    function [HPM_NUM_COUNTERS_BITS-1:0] trunc_event_idx(input [CSR_ADDR_WIDTH:0] val_in);
+        trunc_event_idx = val_in[HPM_NUM_COUNTERS_BITS-1:0];
     endfunction
 
     if (XLEN != 64) begin
@@ -77,7 +77,7 @@ module hpm_counters
     logic [63:0] mhpmevent_q[HPM_NUM_COUNTERS+3-1:3];
     
     logic [HPM_NUM_COUNTERS_BITS-1:0] mhpmcounter_idx;
-    logic [HPM_NUM_EVENTS_BITS-1:0]   mhpmevent_idx;
+    logic [HPM_NUM_COUNTERS_BITS-1:0]   mhpmevent_idx;
     assign mhpmcounter_idx = trunc_counter_idx(addr_i - CSR_MHPM_COUNTER_3 + 12'd3);
     assign mhpmevent_idx   = trunc_event_idx  (addr_i - CSR_MHPM_EVENT_3   + 12'd3);
     
