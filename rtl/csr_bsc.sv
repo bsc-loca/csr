@@ -62,6 +62,7 @@ module csr_bsc#(
 
     input  logic [WORD_WIDTH-1:0]           time_i,                    // time passed since the core is reset
 
+`ifdef CONF_SARGANTANA_ENABLE_PCR
     //PCR req inputs
     input  logic                            pcr_req_ready_i,            // ready bit of the pcr
 
@@ -76,6 +77,7 @@ module csr_bsc#(
     output logic  [63:0]                    pcr_req_data_o,             // write data to performance counter module
     output logic  [2:0]                     pcr_req_we_o,               // Cmd of the petition
     output logic  [WORD_WIDTH-1:0]          pcr_req_core_id_o,          // core id of the tile
+`endif // CONF_SARGANTANA_ENABLE_PCR
 
     // floating point flags
     input logic                             fcsr_flags_valid_i,
@@ -212,12 +214,15 @@ module csr_bsc#(
     logic [10:0] vtype_new;
     logic [63:0] vlmax;
 
-    // pcr wires
-    logic pcr_wait_resp_d, pcr_wait_resp_q; // the csr regfile is waiting the response of the PCR
-    logic pcr_req_valid; // the csr regfile requests data to the PCR
-    logic [63:0] reg_time_d, reg_time_q; // time value from de PCR
-    logic cpu_ren; // is needed a read to the csr (write, read, set and clear)
-    logic pcr_addr_valid; // the address requested is a pcr address.
+    // Time value from timer
+    logic [63:0] reg_time_d, reg_time_q;
+
+    `ifdef CONF_SARGANTANA_ENABLE_PCR
+        logic pcr_wait_resp_d, pcr_wait_resp_q; // the csr regfile is waiting the response of the PCR
+        logic pcr_req_valid; // the csr regfile requests data to the PCR
+        logic cpu_ren; // is needed a read to the csr (write, read, set and clear)
+        logic pcr_addr_valid; // the address requested is a pcr address.
+    `endif // CONF_SARGANTANA_ENABLE_PCR
 
     //interruption wires
     logic [63:0] interrupt_cause_q, interrupt_cause_d, interrupt_cause;
@@ -272,7 +277,11 @@ module csr_bsc#(
     always_comb begin : csr_read_process
         // a read access exception can only occur if we attempt to read a CSR which does not exist
         read_access_exception = 1'b0;
-        pcr_addr_valid = 1'b0;
+
+        `ifdef CONF_SARGANTANA_ENABLE_PCR
+            pcr_addr_valid = 1'b0;
+        `endif // CONF_SARGANTANA_ENABLE_PCR
+
         csr_rdata = 64'b0;
         perf_addr_dist = '0;
 
@@ -501,6 +510,7 @@ module csr_bsc#(
                     csr_rdata = perf_data_i;
                 end
 
+                `ifdef CONF_SARGANTANA_ENABLE_PCR
                 riscv_pkg::CSR_MEM_MAP_0,
                 riscv_pkg::CSR_MEM_MAP_1,
                 riscv_pkg::CSR_MEM_MAP_2,
@@ -553,11 +563,13 @@ module csr_bsc#(
                 riscv_pkg::CSR_HYPERRAM_CONFIG, 
                 riscv_pkg::CSR_SPI_CONFIG, 
                 riscv_pkg::CSR_CNM_CONFIG,
-                riscv_pkg::TO_HOST: begin            
-                                        csr_rdata = pcr_resp_data_i;
-                                        pcr_addr_valid = 1'b1;
+                riscv_pkg::TO_HOST: begin 
+                        csr_rdata = pcr_resp_data_i;
+                        pcr_addr_valid = 1'b1;
+                    
                 end
-                
+                `endif // CONF_SARGANTANA_ENABLE_PCR
+
                 riscv_pkg::CSR_PMPCFG_0:;
                 riscv_pkg::CSR_PMPCFG_1:;
                 riscv_pkg::CSR_PMPCFG_2:;
@@ -697,7 +709,11 @@ module csr_bsc#(
 
         en_ld_st_translation_d  = en_ld_st_translation_q;
         dirty_fp_state_csr      = 1'b0;
-        pcr_req_data_o          = 'b0;
+
+        `ifdef CONF_SARGANTANA_ENABLE_PCR
+            pcr_req_data_o          = 'b0;
+        `endif // CONF_SARGANTANA_ENABLE_PCR
+
         mask                    = 64'h0;
         satp_temp='0;
 
@@ -985,6 +1001,7 @@ module csr_bsc#(
                 riscv_pkg::CSR_SCOUNTOVF:
                     update_access_exception = 1'b1;
 
+                `ifdef CONF_SARGANTANA_ENABLE_PCR
                 riscv_pkg::CSR_MEM_MAP_0,
                 riscv_pkg::CSR_MEM_MAP_1,
                 riscv_pkg::CSR_MEM_MAP_2,
@@ -1038,9 +1055,9 @@ module csr_bsc#(
                 riscv_pkg::CSR_SPI_CONFIG, 
                 riscv_pkg::CSR_CNM_CONFIG,
                 riscv_pkg::TO_HOST: begin
-                                        pcr_req_data_o = csr_wdata;
-
+                        pcr_req_data_o = csr_wdata;
                 end
+                `endif // CONF_SARGANTANA_ENABLE_PCR
 
                 riscv_pkg::CSR_PMPCFG_0:;
                 riscv_pkg::CSR_PMPCFG_1:;
@@ -1454,6 +1471,7 @@ module csr_bsc#(
     // PCR contol logic
     // -------------------
 
+`ifdef CONF_SARGANTANA_ENABLE_PCR
     always_comb begin : pcr_ctrl
         //whait until a response from the pcs
         cpu_ren = 1'b0;
@@ -1477,13 +1495,19 @@ module csr_bsc#(
         pcr_req_core_id_o = core_id_i;
         pcr_req_valid_o = pcr_req_valid;
     end
+`endif // CONF_SARGANTANA_ENABLE_PCR
 
     // -------------------
     // CPU actions induced by the csr
     // -------------------
+`ifdef CONF_SARGANTANA_ENABLE_PCR
     assign csr_replay_o = pcr_req_valid & !pcr_req_ready_i; // pcr write but not ready
     assign csr_stall_o = wfi_q || // or waiting pcr response 
                   (pcr_wait_resp_d && (!pcr_resp_valid_i || (pcr_resp_core_id_i != core_id_i)));
+`else
+    assign csr_replay_o = 1'b0;
+    assign csr_stall_o = wfi_q;
+`endif // CONF_SARGANTANA_ENABLE_PCR
 
 
     // output assignments dependent on privilege mode
@@ -1595,8 +1619,12 @@ module csr_bsc#(
             en_ld_st_translation_q <= 1'b0;
             // wait for interrupt
             wfi_q                  <= 1'b0;
-            //PCR assigments
-            pcr_wait_resp_q <= 1'b0;
+
+            `ifdef CONF_SARGANTANA_ENABLE_PCR
+                //PCR assigments
+                pcr_wait_resp_q <= 1'b0;
+            `endif // CONF_SARGANTANA_ENABLE_PCR
+
             reg_time_q <= 64'b0;
 
             //Interrupt assigments
@@ -1640,8 +1668,12 @@ module csr_bsc#(
             en_ld_st_translation_q <= en_ld_st_translation_d;
             // wait for interrupt
             wfi_q                  <= wfi_d;
-            // PCR assigments
-            pcr_wait_resp_q <= pcr_wait_resp_d;
+
+            `ifdef CONF_SARGANTANA_ENABLE_PCR
+                // PCR assigments
+                pcr_wait_resp_q <= pcr_wait_resp_d;
+            `endif // CONF_SARGANTANA_ENABLE_PCR
+
             reg_time_q <= reg_time_d; 
 
             //Interrupt assigments
