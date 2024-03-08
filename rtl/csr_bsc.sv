@@ -602,6 +602,10 @@ module csr_bsc#(
                     
                 end
                 `endif // CONF_SARGANTANA_ENABLE_PCR
+                riscv_pkg::CLEAR_MIP: begin            
+                                        csr_rdata = pcr_resp_data_i;
+                                        pcr_addr_valid = 1'b1;
+                end
 
                 riscv_pkg::CSR_PMPCFG_0:;
                 riscv_pkg::CSR_PMPCFG_1:;
@@ -1127,6 +1131,11 @@ module csr_bsc#(
                         pcr_req_data_o = csr_wdata;
                 end
                 `endif // CONF_SARGANTANA_ENABLE_PCR
+
+                riscv_pkg::CLEAR_MIP: begin
+                        pcr_req_data_o = csr_wdata;
+
+                end
 
                 riscv_pkg::CSR_PMPCFG_0:;
                 riscv_pkg::CSR_PMPCFG_1:;
