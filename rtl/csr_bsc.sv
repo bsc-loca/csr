@@ -200,6 +200,7 @@ module csr_bsc#(
     logic system_insn;
     logic priv_sufficient;
     logic wfi_d, wfi_q;
+    logic irq_q;
 
     // instruction wires
     logic insn_call;
@@ -684,7 +685,7 @@ module csr_bsc#(
         // External Interrupts
         // ---------------------
         // the IRQ_M_EXT = irq_i || rocc_interrupt_i, IRQ_M_SOFT = m_soft_irq_i and IRQ_M_TIMER = time_irq_i
-        mip_d = {mip_q[63:14], perf_count_ovf_int_req_i || mip_q[13], mip_q[12], irq_i, mip_q[10:8], time_irq_i, mip_q[6:4], m_soft_irq_i, mip_q[2:0]};
+        mip_d = {mip_q[63:14], perf_count_ovf_int_req_i || mip_q[13], mip_q[12], irq_q, mip_q[10:8], time_irq_i, mip_q[6:4], m_soft_irq_i, mip_q[2:0]};
 
 
 
@@ -1137,7 +1138,7 @@ module csr_bsc#(
             interrupt_cause = riscv_pkg::M_TIMER_INTERRUPT;
         end
         // Supervisor External Interrupt
-        else if (mie_q[riscv_pkg::S_EXT_INTERRUPT[5:0]] && (mip_q[riscv_pkg::S_EXT_INTERRUPT[5:0]] || irq_i)) begin
+        else if (mie_q[riscv_pkg::S_EXT_INTERRUPT[5:0]] && (mip_q[riscv_pkg::S_EXT_INTERRUPT[5:0]] || irq_q)) begin
             interrupt_cause = riscv_pkg::S_EXT_INTERRUPT;
         end
         // Supervisor Software Interrupt
@@ -1458,7 +1459,7 @@ module csr_bsc#(
         // wait for interrupt register
         wfi_d = wfi_q;
         // if there is any interrupt pending un-stall the core
-        if ((|mip_q) || irq_i) begin
+        if ((|mip_q) || irq_q) begin
             wfi_d = 1'b0;
         // or alternatively if there is no exception pending and we are not in debug mode wait here
         // for the interrupt
@@ -1545,11 +1546,11 @@ module csr_bsc#(
 	end else begin
 		r_data_core_o = csr_rdata;
         	unique case (csr_addr.address)
-        	    riscv_pkg::CSR_MIP: r_data_core_o = csr_rdata | ({63'b0,irq_i} << riscv_pkg::IRQ_S_EXT);
+        	    riscv_pkg::CSR_MIP: r_data_core_o = csr_rdata | ({63'b0,irq_q} << riscv_pkg::IRQ_S_EXT);
         	    // in supervisor mode we also need to check whether we delegated this bit
         	    riscv_pkg::CSR_SIP: begin
         	        r_data_core_o = csr_rdata
-        	                    | ({63'b0,(irq_i & mideleg_q[riscv_pkg::IRQ_S_EXT])} << riscv_pkg::IRQ_S_EXT);
+        	                    | ({63'b0,(irq_q & mideleg_q[riscv_pkg::IRQ_S_EXT])} << riscv_pkg::IRQ_S_EXT);
         	    end
                 default:;
                 endcase
@@ -1619,6 +1620,8 @@ module csr_bsc#(
             en_ld_st_translation_q <= 1'b0;
             // wait for interrupt
             wfi_q                  <= 1'b0;
+            // register external interrupt for timing
+            irq_q                  <= 1'b0;
 
             `ifdef CONF_SARGANTANA_ENABLE_PCR
                 //PCR assigments
@@ -1668,6 +1671,8 @@ module csr_bsc#(
             en_ld_st_translation_q <= en_ld_st_translation_d;
             // wait for interrupt
             wfi_q                  <= wfi_d;
+            // register external interrupt for timing
+            irq_q                  <= irq_i;
 
             `ifdef CONF_SARGANTANA_ENABLE_PCR
                 // PCR assigments
