@@ -214,6 +214,7 @@ module csr_bsc#(
     logic vsetvl_insn;
     logic [10:0] vtype_new;
     logic [63:0] vlmax;
+    logic vnarrow_wide_en_d, vnarrow_wide_en_q;
 
     // Time value from timer
     logic [63:0] reg_time_d, reg_time_q;
@@ -1378,7 +1379,13 @@ module csr_bsc#(
         vtype_new = rw_addr_i[10:0];
         // new vlmax depending on the vtype config
         // vlmax = ((riscv_pkg::VLEN << vtype_new[1:0]) >> 3) >> vtype_new[4:2];
-        vlmax = (riscv_pkg::VLEN >> 3) >> vtype_new[5:3]; // We don't support LMUL != 1
+        // We don't support LMUL > 1
+        case(vtype_new[2:0])
+            3'b101:  vlmax = ((riscv_pkg::VLEN >> 3) >> vtype_new[5:3]) >> 3;
+            3'b110:  vlmax = ((riscv_pkg::VLEN >> 3) >> vtype_new[5:3]) >> 2;
+            3'b111:  vlmax = ((riscv_pkg::VLEN >> 3) >> vtype_new[5:3]) >> 1;
+            default: vlmax = ((riscv_pkg::VLEN >> 3) >> vtype_new[5:3]);
+        endcase
         update_access_exception_vs = 1'b0;
 
         if (vsetvl_insn) begin
@@ -1387,6 +1394,7 @@ module csr_bsc#(
                 // default, keeps the old value
                 vl_d = vl_q;
                 vtype_d = vtype_q;
+                vnarrow_wide_en_d = vnarrow_wide_en_q;
             end else begin
                 // vl assignation depending on the AVL respect VLMAX
                 if (rw_cmd_i == 3'b111) begin //vsetvl with x0
@@ -1403,20 +1411,26 @@ module csr_bsc#(
                     vl_d = vlmax;
                 end
                 // vtype assignation
-                if ((vtype_new[10:8] != 3'b0) || (vtype_new[2:0] != 3'b0)) begin
+                if ((vtype_new[10:8] != 3'b0) || ((vtype_new[2:0] > 3'b0) && (vtype_new[2:0] < 3'b101))) begin
                     vtype_d = {1'b1,63'b0};
                 end else begin
                     vtype_d = {'0,vtype_new};
-                end  
+                end
+                if (vtype_new[2] || (vl_d <= (vlmax >> 1))) begin
+                    vnarrow_wide_en_d = 1'b1;
+                end else begin
+                    vnarrow_wide_en_d = 1'b0;
+                end 
             end              
         end else  begin
             // default, keeps the old value
             vl_d = vl_q;
             vtype_d = vtype_q;
+            vnarrow_wide_en_d = vnarrow_wide_en_q;
         end
     end
-
-    assign vpu_csr_o = {vtype_q[63], vtype_q[7:0], fcsr_q[7:5], 2'b0, vl_q[14:0], 14'b0};
+ 
+    assign vpu_csr_o = {vtype_q[63], vtype_q[7:0], fcsr_q[7:5], 2'b0, vl_q[14:0], vnarrow_wide_en_q, 13'b0};
 
     // ----------------------
     // CSR Exception Control
@@ -1638,6 +1652,7 @@ module csr_bsc#(
             // Vector extension
             vl_q              <= 64'b0;
             vtype_q           <= {1'b1, 63'b0};
+            vnarrow_wide_en_q <= 1'b0;
         end else begin
             priv_lvl_q             <= priv_lvl_d;
             // floating-point registers
@@ -1689,6 +1704,7 @@ module csr_bsc#(
             // Vector extension
             vl_q                    <= vl_d;
             vtype_q                 <= vtype_d;
+            vnarrow_wide_en_q       <= vnarrow_wide_en_d;
         end
     end
 
