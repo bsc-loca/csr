@@ -1358,6 +1358,7 @@ module csr_bsc#(
                     riscv_pkg::PRIV_LVL_M: privilege_violation = 1'b0;
                     riscv_pkg::PRIV_LVL_S: privilege_violation = ~mcounteren_q[csr_addr.address[4:0]];
                     riscv_pkg::PRIV_LVL_U: privilege_violation = ~mcounteren_q[csr_addr.address[4:0]] & ~scounteren_q[csr_addr.address[4:0]];
+                    default: privilege_violation = 1'b1;
                 endcase
             end
         end
