@@ -80,6 +80,7 @@ module csr_bsc#(
 `endif // CONF_SARGANTANA_ENABLE_PCR
 
     // floating point flags
+    input logic                             freg_modified_i,
     input logic                             fcsr_flags_valid_i,
     input logic [4:0]                       fcsr_flags_bits_i,
     output logic [2:0]                      fcsr_rm_o,
@@ -717,6 +718,11 @@ module csr_bsc#(
         if (vsetvl_insn && (mstatus_q.vs != riscv_pkg::Off)) begin
             dirty_v_state_csr = 1'b1;
         end 
+
+        dirty_fp_state_csr      = 1'b0;
+        if (freg_modified_i && (mstatus_q.fs != riscv_pkg::Off)) begin
+            dirty_fp_state_csr = 1'b1;
+        end
 
         if (vxsat_i) begin
             vcsr_d.vxsat = 1'b1;
