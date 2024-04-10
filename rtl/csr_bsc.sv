@@ -86,6 +86,7 @@ module csr_bsc#(
     output logic [1:0]                      fcsr_fs_o,
 
     output logic [1:0]                      vcsr_vs_o,
+    input logic                             vxsat_i,
 
     output logic                            csr_replay_o,               // replay send to the core because there are some parts that are bussy
     output logic                            csr_stall_o,                // The csr are waiting a resp and de core is stalled
@@ -173,6 +174,7 @@ module csr_bsc#(
     logic [31:0] scountovf_q, scountovf_d;
 
     riscv_pkg::fcsr_t fcsr_q, fcsr_d;
+    riscv_pkg::vcsr_t vcsr_q, vcsr_d;
 
     //////////////////////////////////////////////
     // Intermidiet wires and regs declaration
@@ -332,6 +334,35 @@ module csr_bsc#(
                         read_access_exception = 1'b1;
                     end else begin
                         csr_rdata = {56'b0, fcsr_q.frm, fcsr_q.fflags};
+                    end
+                end
+                riscv_pkg::CSR_VCSR: begin
+                    if (mstatus_q.vs == riscv_pkg::Off) begin
+                        read_access_exception = 1'b1;
+                    end else begin
+                        csr_rdata = {61'b0, vcsr_q.vxrm, vcsr_q.vxsat};
+                    end
+                end
+                riscv_pkg::CSR_VXSAT: begin
+                    if (mstatus_q.vs == riscv_pkg::Off) begin
+                        read_access_exception = 1'b1;
+                    end else begin
+                        csr_rdata = {63'b0, vcsr_q.vxsat};
+                    end
+                end
+                riscv_pkg::CSR_VXRM: begin
+                    if (mstatus_q.vs == riscv_pkg::Off) begin
+                        read_access_exception = 1'b1;
+                    end else begin
+                        csr_rdata = {62'b0, vcsr_q.vxrm};
+
+                    end
+                end
+                riscv_pkg::CSR_VSTART: begin // not supported
+                    if (mstatus_q.vs == riscv_pkg::Off) begin
+                        read_access_exception = 1'b1;
+                    end else begin
+                        csr_rdata = {64'b0};
                     end
                 end
                 `endif
@@ -648,6 +679,7 @@ module csr_bsc#(
         perf_data_o             = 'b0;
 
         fcsr_d                  = fcsr_q;
+        vcsr_d                  = vcsr_q;
 
         priv_lvl_d              = priv_lvl_q;
 
@@ -681,6 +713,10 @@ module csr_bsc#(
         if (vsetvl_insn && (mstatus_q.vs != riscv_pkg::Off)) begin
             dirty_v_state_csr = 1'b1;
         end 
+
+        if (vxsat_i) begin
+            vcsr_d.vxsat = 1'b1;
+        end
 
         // ---------------------
         // External Interrupts
@@ -785,10 +821,41 @@ module csr_bsc#(
                     end else begin
                         dirty_fp_state_csr = 1'b1;
                         fcsr_d[7:0] = csr_wdata[7:0]; // ignore writes to reserved space
-                        /*vxsat_d = csr_wdata[8];
-                        vxrm_d = csr_wdata[10:9];*/
+                        flush = 1'b1;
+                    end
+                end
+                riscv_pkg::CSR_VCSR: begin
+                    if (mstatus_q.vs == riscv_pkg::Off) begin
+                        update_access_exception = 1'b1;
+                    end else begin
+                        dirty_v_state_csr = 1'b1;
+                        vcsr_d[2:0] = csr_wdata[2:0]; // ignore writes to reserved space
+                        flush = 1'b1;
+                    end
+                end
+                riscv_pkg::CSR_VXSAT: begin
+                    if (mstatus_q.vs == riscv_pkg::Off) begin
+                        update_access_exception = 1'b1;
+                    end else begin
+                        dirty_v_state_csr  = 1'b1;
+                        vcsr_d.vxsat    = csr_wdata[0];
                         // this instruction has side-effects
                         flush = 1'b1;
+                    end
+                end
+                riscv_pkg::CSR_VXRM: begin
+                    if (mstatus_q.vs == riscv_pkg::Off) begin
+                        update_access_exception = 1'b1;
+                    end else begin
+                        dirty_v_state_csr  = 1'b1;
+                        vcsr_d.vxrm    = csr_wdata[1:0];
+                        // this instruction has side-effects
+                        flush = 1'b1;
+                    end
+                end
+                riscv_pkg::CSR_VSTART: begin
+                    if (mstatus_q.vs == riscv_pkg::Off) begin
+                        update_access_exception = 1'b1;
                     end
                 end
                 `endif
@@ -1653,6 +1720,7 @@ module csr_bsc#(
             vl_q              <= 64'b0;
             vtype_q           <= {1'b1, 63'b0};
             vnarrow_wide_en_q <= 1'b0;
+            vcsr_q            <= 'h0;
         end else begin
             priv_lvl_q             <= priv_lvl_d;
             // floating-point registers
@@ -1705,6 +1773,7 @@ module csr_bsc#(
             vl_q                    <= vl_d;
             vtype_q                 <= vtype_d;
             vnarrow_wide_en_q       <= vnarrow_wide_en_d;
+            vcsr_q                  <= vcsr_d;
         end
     end
 
