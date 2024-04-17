@@ -597,16 +597,13 @@ module csr_bsc#(
                 riscv_pkg::CSR_HYPERRAM_CONFIG, 
                 riscv_pkg::CSR_SPI_CONFIG, 
                 riscv_pkg::CSR_CNM_CONFIG,
-                riscv_pkg::TO_HOST: begin 
+                riscv_pkg::TO_HOST,
+                riscv_pkg::CLEAR_MIP: begin 
                         csr_rdata = pcr_resp_data_i;
                         pcr_addr_valid = 1'b1;
                     
                 end
                 `endif // CONF_SARGANTANA_ENABLE_PCR
-                riscv_pkg::CLEAR_MIP: begin            
-                                        csr_rdata = pcr_resp_data_i;
-                                        pcr_addr_valid = 1'b1;
-                end
 
                 riscv_pkg::CSR_PMPCFG_0:;
                 riscv_pkg::CSR_PMPCFG_1:;
@@ -1133,15 +1130,11 @@ module csr_bsc#(
                 riscv_pkg::CSR_HYPERRAM_CONFIG, 
                 riscv_pkg::CSR_SPI_CONFIG, 
                 riscv_pkg::CSR_CNM_CONFIG,
-                riscv_pkg::TO_HOST: begin
+                riscv_pkg::TO_HOST,
+                riscv_pkg::CLEAR_MIP: begin
                         pcr_req_data_o = csr_wdata;
                 end
                 `endif // CONF_SARGANTANA_ENABLE_PCR
-
-                riscv_pkg::CLEAR_MIP: begin
-                        pcr_req_data_o = csr_wdata;
-
-                end
 
                 riscv_pkg::CSR_PMPCFG_0:;
                 riscv_pkg::CSR_PMPCFG_1:;
@@ -1221,7 +1214,7 @@ module csr_bsc#(
             interrupt_cause = riscv_pkg::M_TIMER_INTERRUPT;
         end
         // Supervisor External Interrupt
-        else if (mie_q[riscv_pkg::S_EXT_INTERRUPT[5:0]] && (mip_q[riscv_pkg::S_EXT_INTERRUPT[5:0]] || irq_q)) begin
+        else if (mie_q[riscv_pkg::S_EXT_INTERRUPT[5:0]] && (mip_q[riscv_pkg::S_EXT_INTERRUPT[5:0]])) begin
             interrupt_cause = riscv_pkg::S_EXT_INTERRUPT;
         end
         // Supervisor Software Interrupt
