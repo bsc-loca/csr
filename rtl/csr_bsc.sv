@@ -1478,7 +1478,8 @@ module csr_bsc#(
                     vl_d = vlmax;
                 end
                 // vtype assignation
-                if ((vtype_new[10:8] != 3'b0) || ((vtype_new[2:0] > 3'b0) && (vtype_new[2:0] < 3'b101))) begin
+                if ((vtype_new[10:8] != 3'b0) || ((vtype_new[2:0] > 3'b0) && (vtype_new[2:0] < 3'b101)) ||
+                    (vtype_new[1:0] >= vtype_new[4:3])) begin // unsupported SEW,LMUL configuration (rvv1.0 page 11)
                     vtype_d = {1'b1,63'b0};
                 end else begin
                     vtype_d = {'0,vtype_new};
