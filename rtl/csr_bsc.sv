@@ -1506,7 +1506,7 @@ module csr_bsc#(
         end
     end
  
-    assign vpu_csr_o = {vtype_q[63], vtype_q[7:0], fcsr_q[7:5], 2'b0, vl_q[14:0], vnarrow_wide_en_q, 13'b0};
+    assign vpu_csr_o = {vtype_q[63], vtype_q[7:0], fcsr_q[7:5], vcsr_q.vxrm, vl_q[14:0], vnarrow_wide_en_q, 13'b0};
 
     // ----------------------
     // CSR Exception Control
