@@ -1498,7 +1498,11 @@ module csr_bsc#(
                     vnarrow_wide_en_d = 1'b0;
                 end 
             end              
-        end else  begin
+        end else if (rw_cmd_i == 4'b1001) begin //VLEFF
+            vl_d = w_data_core_i;
+            vtype_d = vtype_q;
+            vnarrow_wide_en_d = vnarrow_wide_en_q;
+        end else begin
             // default, keeps the old value
             vl_d = vl_q;
             vtype_d = vtype_q;
