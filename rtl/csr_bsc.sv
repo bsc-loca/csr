@@ -43,6 +43,7 @@ module csr_bsc#(
     //Exceptions 
     input logic                             ex_i,                       // exception produced in the core
     input logic [WORD_WIDTH-1:0]            ex_cause_i,                 //cause of the exception
+    input logic [63:0]                      ex_origin_i,                //origin of the exception
     input logic [63:0]                      pc_i,                       //pc were the exception is produced
 
     input logic [RETIRE_BW-1:0]             retire_i,                   // shows if a instruction is retired from the core.
@@ -414,11 +415,10 @@ module csr_bsc#(
                 riscv_pkg::CSR_SCAUSE:             csr_rdata = scause_q;
                 riscv_pkg::CSR_STVAL:              csr_rdata = stval_q;
                 riscv_pkg::CSR_SATP: begin
+                    csr_rdata = satp_q;
                     // intercept reads to SATP if in S-Mode and TVM is enabled
                     if ((priv_lvl_o == riscv_pkg::PRIV_LVL_S) && mstatus_q.tvm) begin
                         read_access_exception = 1'b1;
-                    end else begin
-                        csr_rdata = satp_q;
                     end
                 end
                 // machine mode registers
@@ -1276,7 +1276,7 @@ module csr_bsc#(
                                     riscv_pkg::ST_AMO_ADDR_MISALIGNED, riscv_pkg::ST_AMO_ACCESS_FAULT,
                                     riscv_pkg::LD_PAGE_FAULT, riscv_pkg::ST_AMO_PAGE_FAULT,
                                     riscv_pkg::INSTR_PAGE_FAULT, riscv_pkg::INSTR_ADDR_MISALIGNED}) begin
-                ex_tval = w_data_core_i;
+                ex_tval = ex_origin_i;
             end else if ((ex_i && (ex_cause_i == riscv_pkg::ILLEGAL_INSTR)) || (csr_xcpt && (csr_xcpt_cause == riscv_pkg::ILLEGAL_INSTR))) begin
                 ex_tval = 64'b0;
 	    end else if (csr_xcpt && (csr_xcpt_cause == riscv_pkg::BREAKPOINT)) begin
