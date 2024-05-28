@@ -23,7 +23,6 @@ module csr_bsc#(
     parameter WORD_WIDTH = 64,
     parameter PPN_WIDTH = 20,
     parameter CSR_ADDR_WIDTH = 12,
-    parameter BOOT_ADDR = 'h100,
     parameter ASID_WIDTH = 13,
     parameter RETIRE_BW = 2,
     parameter VLEN_V = 16384
@@ -36,6 +35,7 @@ module csr_bsc#(
     `ifdef PITON_CINCORANCH
     input   logic [1:0]                     boot_main_id_i,             // CINCORANCH Specific boot id 
     `endif  // Custom for CincoRanch
+    input logic [WORD_WIDTH-1:0]            boot_addr_i,                // Boot address, previously parameter BOOT_ADDR
 
     // RW interface with the core
     input logic [CSR_ADDR_WIDTH-1:0]        rw_addr_i,                  //read and write address form the core
@@ -689,7 +689,7 @@ module csr_bsc#(
         // on the top-level.
         mtvec_d = mtvec_q;
         if (mtvec_rst_load_q) begin
-            mtvec_d             = BOOT_ADDR + 'h40;
+            mtvec_d             = boot_addr_i;
         end 
 
         dirty_v_state_csr = 1'b0;
