@@ -19,12 +19,15 @@
  */
 
 module csr_bsc#(
+    parameter def_pkg::core_type_t CORE_TYPE = def_pkg::SARGANTANA_CORE,
     parameter WORD_WIDTH = 64,
     parameter PPN_WIDTH = 20,
     parameter CSR_ADDR_WIDTH = 12,
     parameter BOOT_ADDR = 'h100,
     parameter ASID_WIDTH = 13,
-    parameter RETIRE_BW = 2
+    parameter RETIRE_BW = 2,
+    parameter VLEN_V = 16384
+
 )(
     input logic                             clk_i,
     input logic                             rstn_i,
@@ -307,30 +310,6 @@ module csr_bsc#(
                         csr_rdata = {61'b0, fcsr_q.frm};
                     end
                 end
-		`ifdef LAGARTO_KA //VPU
-                riscv_pkg::CSR_FCSR: begin
-                    if (mstatus_q.fs == riscv_pkg::Off) begin
-                        read_access_exception = 1'b1;
-                    end else begin
-                        csr_rdata = {53'b0, fcsr_q.vxrm, fcsr_q.vxsat, fcsr_q.frm, fcsr_q.fflags};
-                    end
-                end
-                riscv_pkg::CSR_VXSAT: begin
-                    if (mstatus_q.vs == riscv_pkg::Off) begin
-                        read_access_exception = 1'b1;
-                    end else begin
-                        csr_rdata = {63'b0, fcsr_q.vxsat};
-                    end
-                end
-                riscv_pkg::CSR_VXRM: begin
-                    if (mstatus_q.vs == riscv_pkg::Off) begin
-                        read_access_exception = 1'b1;
-                    end else begin
-                        csr_rdata = {62'b0, fcsr_q.vxrm};
-
-                    end
-                end
-                `else 
                 riscv_pkg::CSR_FCSR: begin
                     if (mstatus_q.fs == riscv_pkg::Off) begin
                         read_access_exception = 1'b1;
@@ -345,19 +324,21 @@ module csr_bsc#(
                         csr_rdata = {61'b0, vcsr_q.vxrm, vcsr_q.vxsat};
                     end
                 end
-                riscv_pkg::CSR_VXSAT: begin
-                    if (mstatus_q.vs == riscv_pkg::Off) begin
-                        read_access_exception = 1'b1;
-                    end else begin
-                        csr_rdata = {63'b0, vcsr_q.vxsat};
-                    end
-                end
+
                 riscv_pkg::CSR_VXRM: begin
                     if (mstatus_q.vs == riscv_pkg::Off) begin
                         read_access_exception = 1'b1;
                     end else begin
                         csr_rdata = {62'b0, vcsr_q.vxrm};
 
+                    end
+                end
+
+                riscv_pkg::CSR_VXSAT: begin
+                    if (mstatus_q.vs == riscv_pkg::Off) begin
+                        read_access_exception = 1'b1;
+                    end else begin
+                        csr_rdata = {63'b0, vcsr_q.vxsat};
                     end
                 end
                 riscv_pkg::CSR_VSTART: begin // not supported
@@ -367,7 +348,6 @@ module csr_bsc#(
                         csr_rdata = {64'b0};
                     end
                 end
-                `endif
                 riscv_pkg::CSR_VL: begin
                     if (mstatus_q.vs == riscv_pkg::Off) begin
                         read_access_exception = 1'b1;
@@ -388,7 +368,8 @@ module csr_bsc#(
                     if (mstatus_q.vs == riscv_pkg::Off) begin
                         read_access_exception = 1'b1;
                     end else begin
-                        csr_rdata = riscv_pkg::VLEN >> 3;
+                            csr_rdata = (CORE_TYPE == def_pkg::LKA_CORE) ? 
+                                {1'b0, vcsr_q.vxrm, vcsr_q.vxsat} : riscv_pkg::VLEN >> 3;
                     end
                 end
 
@@ -754,6 +735,7 @@ module csr_bsc#(
 
         en_ld_st_translation_d  = en_ld_st_translation_q;
         dirty_fp_state_csr      = 1'b0;
+        dirty_v_state_csr       = 1'b0;
 
         `ifdef CONF_SARGANTANA_ENABLE_PCR
             pcr_req_data_o          = 'b0;
@@ -786,57 +768,13 @@ module csr_bsc#(
                         flush = 1'b1;
                     end
                 end
-                `ifdef LAGARTO_KA //VPU
                 riscv_pkg::CSR_FCSR: begin
                     if (mstatus_q.fs == riscv_pkg::Off) begin
                         update_access_exception = 1'b1;
                     end else begin
                         dirty_fp_state_csr = 1'b1;
                         fcsr_d[7:0] = csr_wdata[7:0]; // ignore writes to reserved space
-                        fcsr_d.vxsat = csr_wdata[8];
-                        fcsr_d.vxrm = csr_wdata[10:9];
                         // this instruction has side-effects
-                        flush = 1'b1;
-                    end
-                end
-                riscv_pkg::CSR_VXSAT: begin
-                    if (mstatus_q.vs == riscv_pkg::Off) begin
-                        update_access_exception = 1'b1;
-                    end else begin
-                        dirty_fp_state_csr = 1'b1;
-                        dirty_v_state_csr  = 1'b1;
-                        fcsr_d.vxsat    = csr_wdata[0];
-                        // this instruction has side-effects
-                        flush = 1'b1;
-                    end
-                end
-                riscv_pkg::CSR_VXRM: begin
-                    if (mstatus_q.vs == riscv_pkg::Off) begin
-                        update_access_exception = 1'b1;
-                    end else begin
-                        dirty_fp_state_csr = 1'b1;
-                        dirty_v_state_csr  = 1'b1;
-                        fcsr_d.vxrm    = csr_wdata[1:0];
-                        // this instruction has side-effects
-                        flush = 1'b1;
-                    end
-                end
-                `else
-                riscv_pkg::CSR_FCSR: begin
-                    if (mstatus_q.fs == riscv_pkg::Off) begin
-                        update_access_exception = 1'b1;
-                    end else begin
-                        dirty_fp_state_csr = 1'b1;
-                        fcsr_d[7:0] = csr_wdata[7:0]; // ignore writes to reserved space
-                        flush = 1'b1;
-                    end
-                end
-                riscv_pkg::CSR_VCSR: begin
-                    if (mstatus_q.vs == riscv_pkg::Off) begin
-                        update_access_exception = 1'b1;
-                    end else begin
-                        dirty_v_state_csr = 1'b1;
-                        vcsr_d[2:0] = csr_wdata[2:0]; // ignore writes to reserved space
                         flush = 1'b1;
                     end
                 end
@@ -849,6 +787,7 @@ module csr_bsc#(
                         // this instruction has side-effects
                         flush = 1'b1;
                     end
+                    
                 end
                 riscv_pkg::CSR_VXRM: begin
                     if (mstatus_q.vs == riscv_pkg::Off) begin
@@ -856,6 +795,18 @@ module csr_bsc#(
                     end else begin
                         dirty_v_state_csr  = 1'b1;
                         vcsr_d.vxrm    = csr_wdata[1:0];
+
+                        // this instruction has side-effects
+                        flush = 1'b1;
+                    end
+                end
+                riscv_pkg::CSR_VCSR: begin
+                    if (mstatus_q.vs == riscv_pkg::Off) begin
+                        update_access_exception = 1'b1;
+                    end else begin
+                        dirty_v_state_csr = 1'b1;
+                        vcsr_d.vxsat = csr_wdata[0];
+                        vcsr_d.vxrm = csr_wdata[2:1];
                         // this instruction has side-effects
                         flush = 1'b1;
                     end
@@ -865,7 +816,6 @@ module csr_bsc#(
                         update_access_exception = 1'b1;
                     end
                 end
-                `endif
                 // debug CSR
                 riscv_pkg::CSR_DCSR:;// not implemented
                 riscv_pkg::CSR_DPC:;// not implemented
@@ -897,7 +847,7 @@ module csr_bsc#(
                     mip_d = (mip_q & ~mask) | (csr_wdata & mask);
                 end
 
-                riscv_pkg::CSR_SCOUNTEREN:         scounteren_d = csr_wdata[31:0];
+                riscv_pkg::CSR_SCOUNTEREN:         scounteren_d =  {csr_wdata[31:0]};
                 riscv_pkg::CSR_STVEC:              stvec_d     = {csr_wdata[63:2], 1'b0, csr_wdata[0]};
                 riscv_pkg::CSR_SSCRATCH:           sscratch_d  = csr_wdata;
                 riscv_pkg::CSR_SEPC:               sepc_int    = {csr_wdata[63:1], 1'b0};
@@ -1450,33 +1400,39 @@ module csr_bsc#(
     // Vector instruccions excecution
     // -------------------
     always_comb begin : vsetvl_ctrl
-
         vtype_new = rw_addr_i[10:0];
-        // new vlmax depending on the vtype config
-        // vlmax = ((riscv_pkg::VLEN << vtype_new[1:0]) >> 3) >> vtype_new[4:2];
-        // We don't support LMUL > 1
-        case(vtype_new[2:0])
-            3'b101:  vlmax = ((riscv_pkg::VLEN >> 3) >> vtype_new[5:3]) >> 3;
-            3'b110:  vlmax = ((riscv_pkg::VLEN >> 3) >> vtype_new[5:3]) >> 2;
-            3'b111:  vlmax = ((riscv_pkg::VLEN >> 3) >> vtype_new[5:3]) >> 1;
-            default: vlmax = ((riscv_pkg::VLEN >> 3) >> vtype_new[5:3]);
-        endcase
-        update_access_exception_vs = 1'b0;
 
+        // new vlmax depending on the vtype config
+        if(CORE_TYPE == def_pkg::LKA_CORE) begin
+            vlmax = ((VLEN_V << vtype_new[2:0]) >> 3) >> vtype_new[5:3];
+        end else begin
+            case(vtype_new[2:0])
+                3'b101:  vlmax = ((riscv_pkg::VLEN >> 3) >> vtype_new[5:3]) >> 3;
+                3'b110:  vlmax = ((riscv_pkg::VLEN >> 3) >> vtype_new[5:3]) >> 2;
+                3'b111:  vlmax = ((riscv_pkg::VLEN >> 3) >> vtype_new[5:3]) >> 1;
+                default: vlmax = ((riscv_pkg::VLEN >> 3) >> vtype_new[5:3]);
+            endcase
+        end
+
+        update_access_exception_vs = 1'b0;
         if (vsetvl_insn) begin
-            if (mstatus_q.vs == riscv_pkg::Off) begin
+
+            if ((mstatus_q.vs == riscv_pkg::Off)) begin
                 update_access_exception_vs = 1'b1;
                 // default, keeps the old value
                 vl_d = vl_q;
                 vtype_d = vtype_q;
                 vnarrow_wide_en_d = vnarrow_wide_en_q;
+
             end else begin
                 // vl assignation depending on the AVL respect VLMAX
-                if (rw_cmd_i == 3'b111) begin //vsetvl with x0
-                    if (w_data_core_i == 64'b1) begin
-                        vl_d = vl_q;
+                if (rw_cmd_i[2:0] == 3'b111) begin //vsetvl with x0
+                    if (w_data_core_i == 64'b1) begin  
+                        vl_d = (CORE_TYPE == def_pkg::LKA_CORE) ? 
+                            vlmax : vl_q; //TODO: Why is this swapped in lka case? idk, but its how it worked until now.
                     end else begin
-                        vl_d = vlmax;
+                        vl_d = (CORE_TYPE == def_pkg::LKA_CORE) ? 
+                            vl_q : vlmax;
                     end
                 end else if (vlmax >= w_data_core_i) begin
                     vl_d = w_data_core_i;
@@ -1485,13 +1441,25 @@ module csr_bsc#(
                 end else begin
                     vl_d = vlmax;
                 end
+
                 // vtype assignation
-                if ((vtype_new[10:8] != 3'b0) || ((vtype_new[2:0] > 3'b0) && ((vtype_new[2:0] < 3'b101) ||
-                    (vtype_new[1:0] <= vtype_new[4:3])))) begin // unsupported SEW,LMUL configuration (rvv1.0 page 11)
-                    vtype_d = {1'b1,63'b0};
+                if(CORE_TYPE == def_pkg::LKA_CORE) begin
+
+                    if ((vtype_new[10:8] != 6'b0)) begin // unsupported SEW,LMUL configuration (rvv1.0 page 11)
+                        vtype_d = {1'b1,63'b0};
+                    end else begin
+                        vtype_d = {'0,vtype_new};
+                    end
                 end else begin
-                    vtype_d = {'0,vtype_new};
+                // vtype assignation
+                    if ((vtype_new[10:8] != 3'b0) || ((vtype_new[2:0] > 3'b0) && ((vtype_new[2:0] < 3'b101) ||
+                        (vtype_new[1:0] <= vtype_new[4:3])))) begin // unsupported SEW,LMUL configuration (rvv1.0 page 11)
+                        vtype_d = {1'b1,63'b0};
+                    end else begin
+                        vtype_d = {'0,vtype_new};
+                    end
                 end
+            
                 if (vtype_new[2] || (vl_d <= (vlmax >> 1))) begin
                     vnarrow_wide_en_d = 1'b1;
                 end else begin
@@ -1509,8 +1477,9 @@ module csr_bsc#(
             vnarrow_wide_en_d = vnarrow_wide_en_q;
         end
     end
- 
-    assign vpu_csr_o = {vtype_q[63], vtype_q[7:0], fcsr_q[7:5], vcsr_q.vxrm, vl_q[14:0], vnarrow_wide_en_q, 13'b0};
+
+    assign vpu_csr_o = {vtype_q[63], vtype_q[7:0], fcsr_q.frm, vcsr_q.vxrm, vl_q[14:0], vnarrow_wide_en_q, 13'b0};
+
 
     // ----------------------
     // CSR Exception Control
