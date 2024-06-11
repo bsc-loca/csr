@@ -35,7 +35,7 @@ module csr_bsc#(
     `ifdef PITON_CINCORANCH
     input   logic [1:0]                     boot_main_id_i,             // CINCORANCH Specific boot id 
     `endif  // Custom for CincoRanch
-    input logic [WORD_WIDTH-1:0]            boot_addr_i,                // Boot address, previously parameter BOOT_ADDR
+    input logic [WORD_WIDTH-1:0]            trap_vector_addr_i,         // Address of trap vector, set on reset
 
     // RW interface with the core
     input logic [CSR_ADDR_WIDTH-1:0]        rw_addr_i,                  //read and write address form the core
@@ -683,13 +683,13 @@ module csr_bsc#(
 
         // check whether we come out of reset
         // this is a workaround. some tools have issues
-        // having BOOT_ADDR_i in the asynchronous
+        // having trap_vector_addr_i in the asynchronous
         // reset assignment to mtvec_d, even though
-        // BOOT_ADDR_i will be assigned a constant
+        // trap_vector_addr_i will be assigned a constant
         // on the top-level.
         mtvec_d = mtvec_q;
         if (mtvec_rst_load_q) begin
-            mtvec_d             = boot_addr_i;
+            mtvec_d             = trap_vector_addr_i;
         end 
 
         dirty_v_state_csr = 1'b0;
