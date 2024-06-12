@@ -119,7 +119,14 @@ module csr_bsc#(
     output logic                            perf_we_o,
     output logic [31:0]                     perf_mcountinhibit_o,
     input  logic                            perf_count_ovf_int_req_i,
-    input  logic [31:3]                     perf_mhpm_ovf_bits_i
+    input  logic [31:3]                     perf_mhpm_ovf_bits_i,
+
+    // Debug extension
+    input logic [WORD_WIDTH-1:0]            debug_program_buff_addr_i,
+    input logic                             debug_halt_ack_i,
+    input logic                             debug_resume_ack_i,
+    output logic                            debug_mode_en_o,
+    output logic                            debug_step_o
 );
 
     localparam int MHPM_TO_HPM_DIST = riscv_pkg::CSR_HPM_COUNTER_3 - riscv_pkg::CSR_MHPM_COUNTER_3;
@@ -179,6 +186,12 @@ module csr_bsc#(
     logic [63:0] cycle_q,     cycle_d;
     logic [63:0] instret_q,   instret_d;
     logic [31:0] scountovf_q, scountovf_d;
+
+    dcsr_t dcsr_q, dcsr_d;
+    logic [63:0] dpc_q, dpc_d;
+    logic [63:0] dscratch0_q, dscratch0_d;
+    logic [63:0] dscratch1_q, dscratch1_d;
+    logic debug_mode_en_q, debug_mode_en_d;
 
     riscv_pkg::fcsr_t fcsr_q, fcsr_d;
     riscv_pkg::vcsr_t vcsr_q, vcsr_d;
@@ -376,10 +389,10 @@ module csr_bsc#(
                 end
 
                 // debug registers
-                riscv_pkg::CSR_DCSR:               csr_rdata = 64'b0; // not implemented
-                riscv_pkg::CSR_DPC:                csr_rdata = 64'b0; // not implemented
-                riscv_pkg::CSR_DSCRATCH0:          csr_rdata = 64'b0; // not implemented
-                riscv_pkg::CSR_DSCRATCH1:          csr_rdata = 64'b0; // not implemented
+                riscv_pkg::CSR_DCSR:               csr_rdata = {{32{1'b0}}, dcsr_q}; // not implemented
+                riscv_pkg::CSR_DPC:                csr_rdata = dpc_q; // not implemented
+                riscv_pkg::CSR_DSCRATCH0:          csr_rdata = dscratch0_q; // not implemented
+                riscv_pkg::CSR_DSCRATCH1:          csr_rdata = dscratch1_q; // not implemented
                 // trigger module registers
                 riscv_pkg::CSR_TSELECT:; // not implemented
                 riscv_pkg::CSR_TDATA1:;  // not implemented
@@ -825,10 +838,16 @@ module csr_bsc#(
                     end
                 end
                 // debug CSR
-                riscv_pkg::CSR_DCSR:;// not implemented
-                riscv_pkg::CSR_DPC:;// not implemented
-                riscv_pkg::CSR_DSCRATCH0:;// not implemented
-                riscv_pkg::CSR_DSCRATCH1:;// not implemented
+                riscv_pkg::CSR_DCSR: begin
+                    if (csr_wdata[1:0] == 2'b10) begin // illegal value for prv, maintain old
+                        dcsr_d = {dcsr_q[31:16], csr_wdata[15], 1'b0, csr_wdata[14:12], dcsr_q[11:3], csr_wdata[2], dcsr_q[1:0]};
+                    end else begin
+                        dcsr_d = {dcsr_q[31:16], csr_wdata[15], 1'b0, csr_wdata[14:12], dcsr_q[11:3], csr_wdata[2:0]};
+                    end
+                end
+                riscv_pkg::CSR_DPC:         dpc_d = csr_wdata;
+                riscv_pkg::CSR_DSCRATCH0:   dscratch0_d = csr_wdata;
+                riscv_pkg::CSR_DSCRATCH1:   dscratch1_d = csr_wdata;
                 // trigger module CSRs
                 riscv_pkg::CSR_TSELECT:; // not implemented
                 riscv_pkg::CSR_TDATA1:;  // not implemented
@@ -1192,7 +1211,7 @@ module csr_bsc#(
         
         // if the priv is different of M or the mie is 1, the interrups are enable
         global_enable = ((mstatus_q.mie && (priv_lvl_o == riscv_pkg::PRIV_LVL_M))
-                                    || (priv_lvl_o != riscv_pkg::PRIV_LVL_M));
+                                        || (priv_lvl_o != riscv_pkg::PRIV_LVL_M)) && (~debug_mode_en_q) && (~dcsr_q.step);
 
         if (interrupt_cause[63] && global_enable) begin
             // However, if bit i in mideleg is set, interrupts are considered to be globally enabled if the hart’s current privilege
@@ -1227,7 +1246,7 @@ module csr_bsc#(
         // Exception is taken and we are not in debug mode
         // exceptions in debug mode don't update any fields
         
-        if (((ex_cause_i != riscv_pkg::DEBUG_REQUEST) && ex_i) || csr_xcpt) begin
+        if ((((ex_cause_i != riscv_pkg::DEBUG_REQUEST) && ex_i) || csr_xcpt) && (~debug_mode_en_q)) begin
             // do not flush, flush is reserved for CSR writes with side effects
             flush_o   = 1'b0;
             ex_tval = pc_i;
@@ -1239,7 +1258,7 @@ module csr_bsc#(
                 ex_tval = ex_origin_i;
             end else if ((ex_i && (ex_cause_i == riscv_pkg::ILLEGAL_INSTR)) || (csr_xcpt && (csr_xcpt_cause == riscv_pkg::ILLEGAL_INSTR))) begin
                 ex_tval = 64'b0;
-	    end else if (csr_xcpt && (csr_xcpt_cause == riscv_pkg::BREAKPOINT)) begin
+	        end else if (csr_xcpt && (csr_xcpt_cause == riscv_pkg::BREAKPOINT)) begin
                 ex_tval = pc_i;
             end else begin
                 ex_tval = 64'b0;
@@ -1323,7 +1342,7 @@ module csr_bsc#(
         // ------------------------------
         // Set the address translation at which the load and stores should occur
         // we can use the previous values since changing the address translation will always involve a pipeline flush
-        if (mprv && (satp_q.mode == def_pkg::MODE_SV39) && (mstatus_q.mpp != riscv_pkg::PRIV_LVL_M)) begin
+        if (mprv && (satp_q.mode == def_pkg::MODE_SV39) && (mstatus_q.mpp != riscv_pkg::PRIV_LVL_M) && (~debug_mode_en_q)) begin
             en_ld_st_translation_d = 1'b1;
         end else begin // otherwise we go with the regular settings
             en_ld_st_translation_d = en_translation_o;
@@ -1331,10 +1350,45 @@ module csr_bsc#(
             //en_ld_st_translation_o = en_ld_st_translation_q;
         end
 	
-	ld_st_priv_lvl_o = (mprv) ? mstatus_q.mpp : priv_lvl_o;
-	en_ld_st_translation_o = en_ld_st_translation_q;
-        
+        ld_st_priv_lvl_o = (mprv && (~debug_mode_en_q)) ? mstatus_q.mpp : priv_lvl_o;
+        en_ld_st_translation_o = en_ld_st_translation_q;
+
+        debug_mode_en_d = debug_mode_en_q;
+        if (debug_halt_ack_i) begin
+            dcsr_d.cause = 3'h3;
+            dcsr_d.prv = priv_lvl_q;
+            dpc_d = pc_i; // pc of the next instruction to be executed
+            debug_mode_en_d = 1'b1;
+            priv_lvl_d = riscv_pkg::PRIV_LVL_M;
+        end else if (insn_break) begin
+            if (((priv_lvl_q == riscv_pkg::PRIV_LVL_M) && (dcsr_q.ebreakm)) || 
+                ((priv_lvl_q == riscv_pkg::PRIV_LVL_S) && (dcsr_q.ebreaks)) ||
+                ((priv_lvl_q == riscv_pkg::PRIV_LVL_U) && (dcsr_q.ebreaku))) begin
+                dcsr_d.cause = 3'h1;
+                dcsr_d.prv = priv_lvl_q;
+                dpc_d = pc_i; // pc of the ebreak_instruction
+                debug_mode_en_d = 1'b1;
+                priv_lvl_d = riscv_pkg::PRIV_LVL_M;
+            end
+        end else if ((~debug_mode_en_q) && dcsr_q.step) begin
+            dcsr_d.cause = 3'h4;
+            dcsr_d.prv = priv_lvl_q;
+            dpc_d = pc_i; // pc of the next instruction to be executed
+            debug_mode_en_d = 1'b1;
+            priv_lvl_d = riscv_pkg::PRIV_LVL_M;
+        end else if (debug_resume_ack_i) begin
+            eret_o = 1'b1;
+            priv_lvl_d = dcsr_q.prv;
+            if (dcsr_q.prv != riscv_pkg::PRIV_LVL_M) begin
+                mstatus_d.mprv = 1'b0;
+            end
+            debug_mode_en_d = 1'b0;
+        end
+
     end
+    
+    assign debug_mode_en_o = debug_mode_en_q;
+    assign debug_mode_step_o = dcsr_q.step;
 
     // ---------------------------
     // CSR OP Select Logic
@@ -1519,8 +1573,12 @@ module csr_bsc#(
             csr_xcpt_cause = riscv_pkg::USER_ECALL + priv_lvl_q;
             csr_xcpt = 1'b1;
         end else if (insn_break) begin
-            csr_xcpt_cause = riscv_pkg::BREAKPOINT;
-            csr_xcpt = 1'b1;
+            if (((priv_lvl_o == riscv_pkg::PRIV_LVL_M) && (~dcsr_q.ebreakm)) || 
+                ((priv_lvl_o == riscv_pkg::PRIV_LVL_S) && (~dcsr_q.ebreaks)) ||
+                ((priv_lvl_o == riscv_pkg::PRIV_LVL_U) && (~dcsr_q.ebreaku))) begin
+                csr_xcpt_cause = riscv_pkg::USER_ECALL + priv_lvl_q;
+                csr_xcpt = 1'b1;
+            end
         end else if (insn_wfi && mstatus_q.tw) begin
             csr_xcpt_cause = riscv_pkg::ILLEGAL_INSTR;
             csr_xcpt = 1'b1;
@@ -1606,6 +1664,10 @@ module csr_bsc#(
             evec_o = trap_vector_base;
         end else if (sret) begin // we are returning from supervisor mode, so take the sepc register
             evec_o = sepc_q;
+        end else if (debug_halt_ack_i) begin // entering debug mode, jump to debug program buffer
+            evec_o = debug_program_buff_addr_i; 
+        end else if (debug_resume_ack_i) begin // returning from debug mode, take dpc register
+            evec_o = dpc_q;
         end
     end
 
@@ -1634,7 +1696,7 @@ module csr_bsc#(
     // fcrs assigments
     assign status_o = mstatus_q;
     // in debug mode we execute with privilege level M
-    assign priv_lvl_o       = priv_lvl_q;
+    assign priv_lvl_o       = (debug_resume_ack_i) ? dcsr_q.prv : priv_lvl_q;
     // FPU outputs
 
     assign fcsr_rm_o        = fcsr_q.frm;
@@ -1710,12 +1772,17 @@ module csr_bsc#(
             //Interrupt assigments
             interrupt_q <= 1'b0;
             interrupt_cause_q <= 64'b0;
-
             // Vector extension
             vl_q              <= 64'b0;
             vtype_q           <= {1'b1, 63'b0};
             vnarrow_wide_en_q <= 1'b0;
             vcsr_q            <= 'h0;
+            // Debug mode
+            dcsr_q <= 32'h40000003;
+            dpc_q <= 64'b0;
+            dscratch0_q <= 64'b0;
+            dscratch1_q <= 64'b0;
+            debug_mode_en_q <= 1'b0;
         end else begin
             priv_lvl_q             <= priv_lvl_d;
             // floating-point registers
@@ -1765,12 +1832,17 @@ module csr_bsc#(
             //Interrupt assigments
             interrupt_q <= interrupt_d;
             interrupt_cause_q <= interrupt_cause_d;
-
             // Vector extension
-            vl_q                    <= vl_d;
-            vtype_q                 <= vtype_d;
-            vnarrow_wide_en_q       <= vnarrow_wide_en_d;
-            vcsr_q                  <= vcsr_d;
+            vl_q                   <= vl_d;
+            vtype_q                <= vtype_d;
+            vnarrow_wide_en_q      <= vnarrow_wide_en_d;
+            vcsr_q                 <= vcsr_d;
+            // Debug mode
+            dcsr_q                 <= dcsr_d;
+            dpc_q                  <= dpc_d;
+            dscratch0_q            <= dscratch0_d;
+            dscratch1_q            <= dscratch1_d;
+            debug_mode_en_q        <= debug_mode_en_d;
         end
     end
 
