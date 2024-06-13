@@ -22,11 +22,11 @@ module csr_bsc#(
     parameter def_pkg::core_type_t CORE_TYPE = def_pkg::SARGANTANA_CORE,
     parameter WORD_WIDTH = 64,
     parameter PPN_WIDTH = 20,
+    parameter PROGRAM_BUFFER_ADDR = 'h400,
     parameter CSR_ADDR_WIDTH = 12,
     parameter ASID_WIDTH = 13,
     parameter RETIRE_BW = 2,
     parameter VLEN_V = 16384
-
 )(
     input logic                             clk_i,
     input logic                             rstn_i,
@@ -122,10 +122,10 @@ module csr_bsc#(
     input  logic [31:3]                     perf_mhpm_ovf_bits_i,
 
     // Debug extension
-    input logic [WORD_WIDTH-1:0]            debug_program_buff_addr_i,
     input logic                             debug_halt_ack_i,
     input logic                             debug_resume_ack_i,
     output logic                            debug_mode_en_o,
+    output logic                            debug_ebreak_o,
     output logic                            debug_step_o
 );
 
@@ -187,11 +187,12 @@ module csr_bsc#(
     logic [63:0] instret_q,   instret_d;
     logic [31:0] scountovf_q, scountovf_d;
 
-    dcsr_t dcsr_q, dcsr_d;
+    riscv_pkg::dcsr_t dcsr_q, dcsr_d;
     logic [63:0] dpc_q, dpc_d;
     logic [63:0] dscratch0_q, dscratch0_d;
     logic [63:0] dscratch1_q, dscratch1_d;
     logic debug_mode_en_q, debug_mode_en_d;
+    logic debug_ebreak_q, debug_ebreak_d;
 
     riscv_pkg::fcsr_t fcsr_q, fcsr_d;
     riscv_pkg::vcsr_t vcsr_q, vcsr_d;
@@ -1354,13 +1355,9 @@ module csr_bsc#(
         en_ld_st_translation_o = en_ld_st_translation_q;
 
         debug_mode_en_d = debug_mode_en_q;
-        if (debug_halt_ack_i) begin
-            dcsr_d.cause = 3'h3;
-            dcsr_d.prv = priv_lvl_q;
-            dpc_d = pc_i; // pc of the next instruction to be executed
-            debug_mode_en_d = 1'b1;
-            priv_lvl_d = riscv_pkg::PRIV_LVL_M;
-        end else if (insn_break) begin
+        debug_ebreak_d = 1'b0;
+
+        if (insn_break) begin
             if (((priv_lvl_q == riscv_pkg::PRIV_LVL_M) && (dcsr_q.ebreakm)) || 
                 ((priv_lvl_q == riscv_pkg::PRIV_LVL_S) && (dcsr_q.ebreaks)) ||
                 ((priv_lvl_q == riscv_pkg::PRIV_LVL_U) && (dcsr_q.ebreaku))) begin
@@ -1369,8 +1366,15 @@ module csr_bsc#(
                 dpc_d = pc_i; // pc of the ebreak_instruction
                 debug_mode_en_d = 1'b1;
                 priv_lvl_d = riscv_pkg::PRIV_LVL_M;
+                debug_ebreak_d = 1'b1;
             end
-        end else if ((~debug_mode_en_q) && dcsr_q.step) begin
+        end else if (debug_halt_ack_i) begin
+            dcsr_d.cause = 3'h3;
+            dcsr_d.prv = priv_lvl_q;
+            dpc_d = pc_i; // pc of the next instruction to be executed
+            debug_mode_en_d = 1'b1;
+            priv_lvl_d = riscv_pkg::PRIV_LVL_M;
+        end else if ((~debug_mode_en_q) && dcsr_q.step && retire_i) begin
             dcsr_d.cause = 3'h4;
             dcsr_d.prv = priv_lvl_q;
             dpc_d = pc_i; // pc of the next instruction to be executed
@@ -1388,7 +1392,7 @@ module csr_bsc#(
     end
     
     assign debug_mode_en_o = debug_mode_en_q;
-    assign debug_mode_step_o = dcsr_q.step;
+    assign debug_step_o = dcsr_q.step;
 
     // ---------------------------
     // CSR OP Select Logic
@@ -1665,7 +1669,7 @@ module csr_bsc#(
         end else if (sret) begin // we are returning from supervisor mode, so take the sepc register
             evec_o = sepc_q;
         end else if (debug_halt_ack_i) begin // entering debug mode, jump to debug program buffer
-            evec_o = debug_program_buff_addr_i; 
+            evec_o = PROGRAM_BUFFER_ADDR; 
         end else if (debug_resume_ack_i) begin // returning from debug mode, take dpc register
             evec_o = dpc_q;
         end
@@ -1719,6 +1723,8 @@ module csr_bsc#(
 
     // timer output assign
     assign reg_time_d = time_i;
+    assign debug_ebreak_o = debug_ebreak_q;
+
 
     // sequential process
     always_ff @(posedge clk_i, negedge rstn_i) begin
@@ -1783,6 +1789,7 @@ module csr_bsc#(
             dscratch0_q <= 64'b0;
             dscratch1_q <= 64'b0;
             debug_mode_en_q <= 1'b0;
+            debug_ebreak_q <= 1'b0;
         end else begin
             priv_lvl_q             <= priv_lvl_d;
             // floating-point registers
@@ -1843,6 +1850,8 @@ module csr_bsc#(
             dscratch0_q            <= dscratch0_d;
             dscratch1_q            <= dscratch1_d;
             debug_mode_en_q        <= debug_mode_en_d;
+            debug_ebreak_q <= debug_ebreak_d;
+
         end
     end
 
