@@ -122,6 +122,7 @@ module csr_bsc#(
     input  logic [31:3]                     perf_mhpm_ovf_bits_i,
 
     // Debug extension
+    input logic                             debug_halt_req_i,
     input logic                             debug_halt_ack_i,
     input logic                             debug_resume_ack_i,
     output logic                            debug_mode_en_o,
@@ -846,9 +847,9 @@ module csr_bsc#(
                 // debug CSR
                 riscv_pkg::CSR_DCSR: begin
                     if (csr_wdata[1:0] == 2'b10) begin // illegal value for prv, maintain old
-                        dcsr_d = {dcsr_q[31:16], csr_wdata[15], 1'b0, csr_wdata[14:12], dcsr_q[11:3], csr_wdata[2], dcsr_q[1:0]};
+                        dcsr_d = {dcsr_q[31:16], csr_wdata[15], 1'b0, csr_wdata[13:12], dcsr_q[11:3], csr_wdata[2], dcsr_q[1:0]};
                     end else begin
-                        dcsr_d = {dcsr_q[31:16], csr_wdata[15], 1'b0, csr_wdata[14:12], dcsr_q[11:3], csr_wdata[2:0]};
+                        dcsr_d = {dcsr_q[31:16], csr_wdata[15], 1'b0, csr_wdata[13:12], dcsr_q[11:3], csr_wdata[2:0]};
                     end
                 end
                 riscv_pkg::CSR_DPC:         dpc_d = csr_wdata;
@@ -1379,7 +1380,7 @@ module csr_bsc#(
             dpc_d = pc_i; // pc of the next instruction to be executed
             debug_mode_en_d = 1'b1;
             priv_lvl_d = riscv_pkg::PRIV_LVL_M;
-        end else if ((~debug_mode_en_q) && dcsr_q.step && retire_i) begin
+        end else if ((~debug_mode_en_q) & dcsr_q.step & (|retire_i)) begin
             dcsr_d.cause = 3'h4;
             dcsr_d.prv = priv_lvl_q;
             dpc_d = pc_i; // pc of the next instruction to be executed
@@ -1601,7 +1602,7 @@ module csr_bsc#(
         // wait for interrupt register
         wfi_d = wfi_q;
         // if there is any interrupt pending un-stall the core
-        if ((|mip_q) || irq_q) begin
+        if ((|mip_q) || irq_q || debug_halt_req_i) begin
             wfi_d = 1'b0;
         // or alternatively if there is no exception pending and we are not in debug mode wait here
         // for the interrupt
