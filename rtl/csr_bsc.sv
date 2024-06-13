@@ -759,6 +759,11 @@ module csr_bsc#(
         dirty_fp_state_csr      = 1'b0;
         dirty_v_state_csr       = 1'b0;
 
+        dcsr_d = dcsr_q;
+        dpc_d = dpc_q;
+        dscratch0_d = dscratch0_q;
+        dscratch1_d = dscratch1_q;
+
         `ifdef CONF_SARGANTANA_ENABLE_PCR
             pcr_req_data_o          = 'b0;
         `endif // CONF_SARGANTANA_ENABLE_PCR
