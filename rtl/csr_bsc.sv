@@ -410,6 +410,7 @@ module csr_bsc#(
                 riscv_pkg::CSR_MIE:                csr_rdata = mie_q;
                 riscv_pkg::CSR_MTVEC:              csr_rdata = mtvec_q;
                 riscv_pkg::CSR_MCOUNTEREN:         csr_rdata = {{32{1'b0}}, mcounteren_q};
+                riscv_pkg::CSR_MCOUNTINHIBIT:      csr_rdata = {{32{1'b0}}, mcountinhibit_q[31:2], 1'b0, mcountinhibit_q[0]};
                 riscv_pkg::CSR_MSCRATCH:           csr_rdata = mscratch_q;
                 riscv_pkg::CSR_MEPC:               csr_rdata = mepc_q;
                 riscv_pkg::CSR_MCAUSE:             csr_rdata = mcause_q;
