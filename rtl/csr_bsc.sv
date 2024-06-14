@@ -1586,7 +1586,7 @@ module csr_bsc#(
             if (((priv_lvl_o == riscv_pkg::PRIV_LVL_M) && (~dcsr_q.ebreakm)) || 
                 ((priv_lvl_o == riscv_pkg::PRIV_LVL_S) && (~dcsr_q.ebreaks)) ||
                 ((priv_lvl_o == riscv_pkg::PRIV_LVL_U) && (~dcsr_q.ebreaku))) begin
-                csr_xcpt_cause = riscv_pkg::USER_ECALL + priv_lvl_q;
+                csr_xcpt_cause = riscv_pkg::BREAKPOINT;
                 csr_xcpt = 1'b1;
             end
         end else if (insn_wfi && mstatus_q.tw) begin
