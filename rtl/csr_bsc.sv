@@ -125,7 +125,6 @@ module csr_bsc#(
     input logic                             debug_halt_req_i,
     input logic                             debug_halt_ack_i,
     input logic                             debug_resume_ack_i,
-    output logic                            debug_mode_en_o,
     output logic                            debug_ebreak_o,
     output logic                            debug_step_o
 );
