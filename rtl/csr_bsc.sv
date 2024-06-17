@@ -1669,7 +1669,7 @@ module csr_bsc#(
 
         evec_o = mepc_q; // we are returning from machine mode, so take the mepc register
         
-        if (ex_i || csr_xcpt_o) begin // an exception is detected in the core and it is send the trap address
+        if ((ex_i || csr_xcpt_o) & ~debug_mode_en_q) begin // an exception is detected in the core and it is send the trap address
             evec_o = trap_vector_base;
         end else if (sret) begin // we are returning from supervisor mode, so take the sepc register
             evec_o = sepc_q;
