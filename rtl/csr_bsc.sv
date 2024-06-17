@@ -1385,7 +1385,7 @@ module csr_bsc#(
             dpc_d = pc_i; // pc of the next instruction to be executed
             debug_mode_en_d = 1'b1;
             priv_lvl_d = riscv_pkg::PRIV_LVL_M;
-        end else if (debug_resume_ack_i) begin
+        end else if (debug_resume_ack_i & debug_mode_en_q) begin
             eret_o = 1'b1;
             priv_lvl_d = dcsr_q.prv;
             if (dcsr_q.prv != riscv_pkg::PRIV_LVL_M) begin
@@ -1449,7 +1449,7 @@ module csr_bsc#(
                 privilege_violation = 1'b1;
             end
             // check access to debug mode only CSRs 
-            if (rw_addr_i[11:4] == 8'h7b ) begin
+            if (rw_addr_i[11:4] == 8'h7b && ~debug_mode_en_q) begin
                 privilege_violation = 1'b1;
             end
             if (csr_addr.address inside {[riscv_pkg::CSR_CYCLE:riscv_pkg::CSR_HPM_COUNTER_31]}) begin
