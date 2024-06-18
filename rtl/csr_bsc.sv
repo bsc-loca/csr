@@ -162,9 +162,11 @@ module csr_bsc#(
     logic [63:0] mepc_q,      mepc_d;
     logic [63:0] mcause_q,    mcause_d;
     logic [63:0] mtval_q,     mtval_d;
+    logic [63:0] menvcfg_q,   menvcfg_d;
 
     logic [63:0] stvec_q,     stvec_d;
     logic [31:0] scounteren_q,scounteren_d;
+    logic [63:0] senvcfg_q,   senvcfg_d;
     logic [63:0] sscratch_q,  sscratch_d;
     logic [63:0] sepc_q,      sepc_d;
     logic [63:0] scause_q,    scause_d;
@@ -391,6 +393,7 @@ module csr_bsc#(
                 riscv_pkg::CSR_SIP:                csr_rdata = mip_q & mideleg_q;
                 riscv_pkg::CSR_STVEC:              csr_rdata = stvec_q;
                 riscv_pkg::CSR_SCOUNTEREN:         csr_rdata = {{32{1'b0}}, scounteren_q};
+                riscv_pkg::CSR_SENVCFG:            csr_rdata = {63'b0, senvcfg_q[0]}; // only implemented FIOM
                 riscv_pkg::CSR_SSCRATCH:           csr_rdata = sscratch_q;
                 riscv_pkg::CSR_SEPC:               csr_rdata = sepc_q;
                 riscv_pkg::CSR_SCAUSE:             csr_rdata = scause_q;
@@ -416,10 +419,12 @@ module csr_bsc#(
                 riscv_pkg::CSR_MCAUSE:             csr_rdata = mcause_q;
                 riscv_pkg::CSR_MTVAL:              csr_rdata = mtval_q;
                 riscv_pkg::CSR_MIP:                csr_rdata = mip_q;
+                riscv_pkg::CSR_MENVCFG:            csr_rdata = {63'b0, menvcfg_q[0]}; // only FIOM bit implemented
                 riscv_pkg::CSR_MVENDORID:          csr_rdata = 64'b0; // not implemented
                 riscv_pkg::CSR_MARCHID:            csr_rdata = 64'b0; // not implemented
                 riscv_pkg::CSR_MIMPID:             csr_rdata = 64'b0; // not implemented
                 riscv_pkg::CSR_MHARTID:            csr_rdata = core_id_i; 
+                riscv_pkg::CSR_MCONFIGPTR:         csr_rdata = 64'b0; // not implemented
                 `ifdef PITON_CINCORANCH
                 riscv_pkg::CSR_MBOOT_MAIN_ID:      csr_rdata = {62'b0, boot_main_id_i};
                 `endif  // Custom for CincoRanch
@@ -725,11 +730,13 @@ module csr_bsc#(
         mcountinhibit_d         = mcountinhibit_q;
         mscratch_d              = mscratch_q;
         mtval_int               = mtval_q;
+        menvcfg_d               = menvcfg_q;
 
         sepc_int                = sepc_q;
         scause_int              = scause_q;
         stvec_d                 = stvec_q;
         scounteren_d            = scounteren_q;
+        senvcfg_d               = senvcfg_q;
         sscratch_d              = sscratch_q;
         stval_int               = stval_q;
         satp_d                  = satp_q;
@@ -850,6 +857,7 @@ module csr_bsc#(
 
                 riscv_pkg::CSR_SCOUNTEREN:         scounteren_d =  {csr_wdata[31:0]};
                 riscv_pkg::CSR_STVEC:              stvec_d     = {csr_wdata[63:2], 1'b0, csr_wdata[0]};
+                riscv_pkg::CSR_SENVCFG:            senvcfg_d   = csr_wdata;
                 riscv_pkg::CSR_SSCRATCH:           sscratch_d  = csr_wdata;
                 riscv_pkg::CSR_SEPC:               sepc_int    = {csr_wdata[63:1], 1'b0};
                 riscv_pkg::CSR_SCAUSE:             scause_int  = csr_wdata;
@@ -919,6 +927,7 @@ module csr_bsc#(
                 riscv_pkg::CSR_MEPC:               mepc_int    = {csr_wdata[63:1], 1'b0};
                 riscv_pkg::CSR_MCAUSE:             mcause_int  = csr_wdata;
                 riscv_pkg::CSR_MTVAL:              mtval_int   = csr_wdata;
+                riscv_pkg::CSR_MENVCFG:            menvcfg_d   = csr_wdata;
                 riscv_pkg::CSR_MIP: begin
                     mask = riscv_pkg::MIP_SSIP | riscv_pkg::MIP_STIP | riscv_pkg::MIP_SEIP | riscv_pkg::MIP_LCOFIP;
                     mip_d = (mip_q & ~mask) | (csr_wdata & mask);
@@ -1670,11 +1679,13 @@ module csr_bsc#(
             mcountinhibit_q        <= 32'b0;
             mscratch_q             <= 64'b0;
             mtval_q                <= 64'b0;
+            menvcfg_q              <= 64'b0;
             // supervisor mode registers
             sepc_q                 <= 64'b0;
             scause_q               <= 64'b0;
             stvec_q                <= 64'b0;
             scounteren_q           <= 32'b0;
+            senvcfg_q              <= 64'b0;
             sscratch_q             <= 64'b0;
             stval_q                <= 64'b0;
             satp_q                 <= 64'b0;
@@ -1723,11 +1734,13 @@ module csr_bsc#(
             mcountinhibit_q        <= mcountinhibit_d;
             mscratch_q             <= mscratch_d;
             mtval_q                <= mtval_d;
+            menvcfg_q              <= menvcfg_d;
             // supervisor mode registers
             sepc_q                 <= sepc_d;
             scause_q               <= scause_d;
             stvec_q                <= stvec_d;
             scounteren_q           <= scounteren_d;
+            senvcfg_q              <= senvcfg_d;
             sscratch_q             <= sscratch_d;
             stval_q                <= stval_d;
             satp_q                 <= satp_d;
