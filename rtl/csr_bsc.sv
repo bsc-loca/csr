@@ -1380,11 +1380,17 @@ module csr_bsc#(
             debug_mode_en_d = 1'b1;
             priv_lvl_d = riscv_pkg::PRIV_LVL_M;
         end else if ((~debug_mode_en_q) & dcsr_q.step & (|retire_i)) begin
+            if ( ex_i | csr_xcpt | sret | mret) begin
+                dpc_d = evec_o;
+                dcsr_d.prv = priv_lvl_d;
+            end else begin
+                dcsr_d.prv = priv_lvl_q;
+                dpc_d = pc_i; // pc of the next instruction to be executed
+            end
             dcsr_d.cause = 3'h4;
-            dcsr_d.prv = priv_lvl_q;
-            dpc_d = pc_i; // pc of the next instruction to be executed
             debug_mode_en_d = 1'b1;
             priv_lvl_d = riscv_pkg::PRIV_LVL_M;
+            debug_ebreak_d = 1'b1;
         end else if (debug_resume_ack_i & debug_mode_en_q) begin
             eret_o = 1'b1;
             priv_lvl_d = dcsr_q.prv;
