@@ -1402,7 +1402,6 @@ module csr_bsc#(
 
     end
     
-    assign debug_mode_en_o = debug_mode_en_q;
     assign debug_step_o = dcsr_q.step;
 
     // ---------------------------
@@ -1455,7 +1454,7 @@ module csr_bsc#(
                 privilege_violation = 1'b1;
             end
             // check access to debug mode only CSRs 
-            if (rw_addr_i[11:4] == 8'h7b && ~debug_mode_en_q) begin
+            if ((rw_addr_i[11:4] == 8'h7b) && (~debug_mode_en_q)) begin
                 privilege_violation = 1'b1;
             end
             if (csr_addr.address inside {[riscv_pkg::CSR_CYCLE:riscv_pkg::CSR_HPM_COUNTER_31]}) begin
