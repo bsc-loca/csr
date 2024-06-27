@@ -1330,6 +1330,10 @@ module csr_bsc#(
             mstatus_d.mpp  = riscv_pkg::PRIV_LVL_U;
             // set mpie to 1
             mstatus_d.mpie = 1'b1;
+            // clear mprv if returning from machine mode to any other mode
+            if ((priv_lvl_d != riscv_pkg::PRIV_LVL_M) && (priv_lvl_d != priv_lvl_q)) begin
+                mstatus_d.mprv = 1'b0;
+            end
         end else if (sret && !((priv_lvl_q == riscv_pkg::PRIV_LVL_S) && (mstatus_q.tsr == 1'b1))) begin
             // return from exception, IF doesn't care from where we are returning
             eret_o = 1'b1;
@@ -1341,6 +1345,10 @@ module csr_bsc#(
             mstatus_d.spp  = 1'b0;
             // set spie to 1
             mstatus_d.spie = 1'b1;
+            // clear mprv if returning from machine mode to any other mode
+            if ((priv_lvl_d != riscv_pkg::PRIV_LVL_M) && (priv_lvl_d != priv_lvl_q)) begin
+                mstatus_d.mprv = 1'b0;
+            end
         end
 
         // ------------------------------
