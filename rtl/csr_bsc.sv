@@ -1692,6 +1692,8 @@ module csr_bsc#(
             evec_o = dpc_q;
         end else if (debug_mode_en_q) begin // if inside debug mode, jump to debug program buffer
             evec_o = PROGRAM_BUFFER_ADDR; 
+        end else if (debug_ebreak_d) begin // if inside debug mode, jump to debug program buffer
+            evec_o = PROGRAM_BUFFER_ADDR; 
         end
     end
 
