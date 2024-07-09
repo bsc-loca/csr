@@ -1370,7 +1370,7 @@ module csr_bsc#(
         debug_mode_en_d = debug_mode_en_q;
         debug_ebreak_d = 1'b0;
 
-        if (insn_break) begin
+        if (insn_break & (~debug_mode_en_q)) begin
             if (((priv_lvl_q == riscv_pkg::PRIV_LVL_M) && (dcsr_q.ebreakm)) || 
                 ((priv_lvl_q == riscv_pkg::PRIV_LVL_S) && (dcsr_q.ebreaks)) ||
                 ((priv_lvl_q == riscv_pkg::PRIV_LVL_U) && (dcsr_q.ebreaku))) begin
@@ -1406,6 +1406,8 @@ module csr_bsc#(
                 mstatus_d.mprv = 1'b0;
             end
             debug_mode_en_d = 1'b0;
+        end else if (insn_break & debug_mode_en_q) begin // exit program buffer
+            debug_ebreak_d = 1'b1;
         end
 
     end
@@ -1594,7 +1596,7 @@ module csr_bsc#(
         end else if (insn_call) begin
             csr_xcpt_cause = riscv_pkg::USER_ECALL + priv_lvl_q;
             csr_xcpt = 1'b1;
-        end else if (insn_break) begin
+        end else if (insn_break & (~debug_mode_en_q)) begin
             if (((priv_lvl_o == riscv_pkg::PRIV_LVL_M) && (~dcsr_q.ebreakm)) || 
                 ((priv_lvl_o == riscv_pkg::PRIV_LVL_S) && (~dcsr_q.ebreaks)) ||
                 ((priv_lvl_o == riscv_pkg::PRIV_LVL_U) && (~dcsr_q.ebreaku))) begin
