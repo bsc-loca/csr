@@ -384,8 +384,8 @@ module csr_bsc#(
                     if (mstatus_q.vs == riscv_pkg::Off) begin
                         read_access_exception = 1'b1;
                     end else begin
-                            csr_rdata = (CORE_TYPE == def_pkg::LKA_CORE) ? 
-                                {1'b0, vcsr_q.vxrm, vcsr_q.vxsat} : riscv_pkg::VLEN >> 3;
+                            csr_rdata = (CORE_TYPE == def_pkg::LKA_CORE) ? VLEN_V >> 3 
+                                                                         : riscv_pkg::VLEN >> 3;
                     end
                 end
 
