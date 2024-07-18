@@ -1387,9 +1387,15 @@ module csr_bsc#(
             dpc_d = pc_i; // pc of the next instruction to be executed
             debug_mode_en_d = 1'b1;
             priv_lvl_d = riscv_pkg::PRIV_LVL_M;
-        end else if ((~debug_mode_en_q) & dcsr_q.step & (|retire_i)) begin
-            if ( ex_i | csr_xcpt | sret | mret) begin
-                dpc_d = evec_o;
+        end else if ((~debug_mode_en_q) & dcsr_q.step & ((|retire_i)| ex_i)) begin
+            if ( ex_i | csr_xcpt) begin
+                dpc_d = trap_vector_base;
+                dcsr_d.prv = priv_lvl_d;
+            end else if( sret ) begin
+                dpc_d = sepc_q;
+                dcsr_d.prv = priv_lvl_d;
+            end else if( mret) begin
+                dpc_d = mepc_q;
                 dcsr_d.prv = priv_lvl_d;
             end else begin
                 dcsr_d.prv = priv_lvl_q;
@@ -1683,11 +1689,24 @@ module csr_bsc#(
         end
 
         evec_o = mepc_q; // we are returning from machine mode, so take the mepc register
-        
         if ((ex_i || csr_xcpt_o) & ~debug_mode_en_q) begin // an exception is detected in the core and it is send the trap address
-            evec_o = trap_vector_base;
+            if (dcsr_q.step) begin
+                evec_o = PROGRAM_BUFFER_ADDR;
+            end else begin
+                evec_o = trap_vector_base;
+            end
         end else if (sret) begin // we are returning from supervisor mode, so take the sepc register
-            evec_o = sepc_q;
+            if (dcsr_q.step) begin
+                evec_o = PROGRAM_BUFFER_ADDR;
+            end else begin
+                evec_o = sepc_q;
+            end
+        end else if (mret) begin // we are returning from machine mode, so take the sepc register
+            if (dcsr_q.step) begin
+                evec_o = PROGRAM_BUFFER_ADDR;
+            end else begin
+                evec_o = mepc_q;
+            end
         end else if (debug_halt_ack_i) begin // entering debug mode, jump to debug program buffer
             evec_o = PROGRAM_BUFFER_ADDR; 
         end else if (debug_resume_ack_i) begin // returning from debug mode, take dpc register
