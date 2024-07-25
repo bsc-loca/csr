@@ -846,9 +846,9 @@ module csr_bsc#(
                 // debug CSR
                 riscv_pkg::CSR_DCSR: begin
                     if (csr_wdata[1:0] == 2'b10) begin // illegal value for prv, maintain old
-                        dcsr_d = {dcsr_q[31:16], csr_wdata[15], 1'b0, csr_wdata[13:12], dcsr_q[11:3], csr_wdata[2], dcsr_q[1:0]};
+                        dcsr_d = {dcsr_q[31:16], csr_wdata[15], 1'b0, csr_wdata[13:12], dcsr_q[11:5], csr_wdata[4], dcsr_q[3], csr_wdata[2], dcsr_q[1:0]};
                     end else begin
-                        dcsr_d = {dcsr_q[31:16], csr_wdata[15], 1'b0, csr_wdata[13:12], dcsr_q[11:3], csr_wdata[2:0]};
+                        dcsr_d = {dcsr_q[31:16], csr_wdata[15], 1'b0, csr_wdata[13:12], dcsr_q[11:5], csr_wdata[4], dcsr_q[3], csr_wdata[2:0]};
                     end
                 end
                 riscv_pkg::CSR_DPC:         dpc_d = csr_wdata;
@@ -1356,7 +1356,7 @@ module csr_bsc#(
         // ------------------------------
         // Set the address translation at which the load and stores should occur
         // we can use the previous values since changing the address translation will always involve a pipeline flush
-        if (mprv && (satp_q.mode == def_pkg::MODE_SV39) && (mstatus_q.mpp != riscv_pkg::PRIV_LVL_M) && (~debug_mode_en_q)) begin
+        if (mprv && (satp_q.mode == def_pkg::MODE_SV39) && (mstatus_q.mpp != riscv_pkg::PRIV_LVL_M) && ((~debug_mode_en_q) || dcsr_q.mprven)) begin
             en_ld_st_translation_d = 1'b1;
         end else begin // otherwise we go with the regular settings
             en_ld_st_translation_d = en_translation_o;
@@ -1364,7 +1364,7 @@ module csr_bsc#(
             //en_ld_st_translation_o = en_ld_st_translation_q;
         end
 	
-        ld_st_priv_lvl_o = (mprv && (~debug_mode_en_q)) ? mstatus_q.mpp : priv_lvl_o;
+        ld_st_priv_lvl_o = (mprv &&  ((~debug_mode_en_q) || dcsr_q.mprven)) ? mstatus_q.mpp : priv_lvl_o;
         en_ld_st_translation_o = en_ld_st_translation_q;
 
         debug_mode_en_d = debug_mode_en_q;
