@@ -1730,7 +1730,7 @@ module csr_bsc#(
 	end else begin
 		r_data_core_o = csr_rdata;
         	unique case (csr_addr.address)
-        	    riscv_pkg::CSR_MIP: r_data_core_o = csr_rdata | ({63'b0, irq_q[0]} << riscv_pkg::IRQ_S_EXT);
+        	    riscv_pkg::CSR_MIP: r_data_core_o = csr_rdata | ({63'b0, irq_q[1]} << riscv_pkg::IRQ_S_EXT);
         	    // in supervisor mode we also need to check whether we delegated this bit
         	    riscv_pkg::CSR_SIP: begin
         	        r_data_core_o = csr_rdata
