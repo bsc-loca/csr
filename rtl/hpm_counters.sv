@@ -41,6 +41,7 @@ module hpm_counters
     
     // Current privilege mode of the core
     input   logic [1:0]     priv_lvl_i,
+    input   logic           v_mode_i,
 
     // Events
     input logic [HPM_NUM_EVENTS:1] events_i,
@@ -92,11 +93,15 @@ module hpm_counters
             mhpm_ovf_bits_o[i] = mhpmevent_q[i][63];
             // The mhpmcounterX can be incremented if bit X of mcountinhibit is clear and 
             // the counting of events in the current privilege mode is not disabled (mhpmeventX bit 62/61/60 is clear)
-            // Hypervisor Extension (H) not supported (mhpmeventX bits 59 and 58)
+            // Hypervisor Extension (H) (mhpmeventX bits 59 and 58)
             if (!mcountinhibit_i[i] && 
-               (!(((priv_lvl_i == riscv_pkg::PRIV_LVL_M) && mhpmevent_q[i][62]) ||
-               ((priv_lvl_i    == riscv_pkg::PRIV_LVL_S) && mhpmevent_q[i][61]) ||
-               ((priv_lvl_i    == riscv_pkg::PRIV_LVL_U) && mhpmevent_q[i][60])))) begin
+               (!(
+               (~v_mode_i && (priv_lvl_i == riscv_pkg::PRIV_LVL_M) && mhpmevent_q[i][62]) ||
+               (~v_mode_i && (priv_lvl_i == riscv_pkg::PRIV_LVL_S) && mhpmevent_q[i][61]) ||
+               (~v_mode_i && (priv_lvl_i == riscv_pkg::PRIV_LVL_U) && mhpmevent_q[i][60]) ||
+               (v_mode_i && (priv_lvl_i == riscv_pkg::PRIV_LVL_S) && mhpmevent_q[i][59]) ||
+               (v_mode_i && (priv_lvl_i == riscv_pkg::PRIV_LVL_U) && mhpmevent_q[i][58])
+               ))) begin
                 // mhpmeventX[55:0] is the position (in the input vector) of the event to be counted in mhpmcounterX (mhpmeventX[55:0] == 0 means "no event")
                 if ((mhpmevent_q[i][55:0] > 0) && (mhpmevent_q[i][55:0] <= HPM_NUM_EVENTS)) begin
                     mhpmcounter_d[i] = trunc_sum_64bits(mhpmcounter_q[i] + events_i[mhpmevent_q[i][HPM_NUM_EVENTS_BITS-1:0]]);
