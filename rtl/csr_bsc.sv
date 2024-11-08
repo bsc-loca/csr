@@ -91,6 +91,7 @@ module csr_bsc#(
     output logic [1:0]                      fcsr_fs_o,
 
     output logic [1:0]                      vcsr_vs_o,
+    input logic                             vreg_modified_i,
     input logic                             vxsat_i,
 
     output logic                            csr_replay_o,               // replay send to the core because there are some parts that are bussy
@@ -713,7 +714,7 @@ module csr_bsc#(
         end 
 
         dirty_v_state_csr = 1'b0;
-        if (vsetvl_insn && (mstatus_q.vs != riscv_pkg::Off)) begin
+        if ((vsetvl_insn | vreg_modified_i) && (mstatus_q.vs != riscv_pkg::Off)) begin
             dirty_v_state_csr = 1'b1;
         end 
 
@@ -756,8 +757,6 @@ module csr_bsc#(
         satp_d                  = satp_q;
 
         en_ld_st_translation_d  = en_ld_st_translation_q;
-        dirty_fp_state_csr      = 1'b0;
-        dirty_v_state_csr       = 1'b0;
 
         dcsr_d = dcsr_q;
         dpc_d = dpc_q;
