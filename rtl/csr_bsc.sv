@@ -1879,7 +1879,7 @@ module csr_bsc#(
             // end
         end 
         
-        if (sret && ((def_pkg::RVH && !v_mode_q) || !def_pkg::RVH)) begin
+        if (sret && !(priv_lvl_q == riscv_pkg::PRIV_LVL_S && mstatus_q.tsr == 1'b1) && ((def_pkg::RVH && !v_mode_q) || !def_pkg::RVH)) begin
           // return from exception, IF doesn't care from where we are returning
           eret_o         = 1'b1;
           // return the previous supervisor interrupt enable flag
@@ -1900,7 +1900,7 @@ module csr_bsc#(
         end
 
         if (def_pkg::RVH) begin
-          if (sret && v_mode_q) begin
+          if (sret && !(priv_lvl_q == riscv_pkg::PRIV_LVL_S && mstatus_q.tsr == 1'b1) && v_mode_q) begin
             // return from exception, IF doesn't care from where we are returning
             eret_o          = 1'b1;
             // return the previous supervisor interrupt enable flag
@@ -2109,6 +2109,16 @@ module csr_bsc#(
               end
             end
           end
+          //checks the level of the system instruction or sfence with tvm = 1 or sret and tsr = 1
+          if ((system_insn && !priv_sufficient) || 
+              ((insn_sfence_vm && (priv_lvl_q == riscv_pkg::PRIV_LVL_S)) && (mstatus_q.tvm == 1'b1)) || 
+              ((insn_hfence_gvma && (!v_mode_q && priv_lvl_q == riscv_pkg::PRIV_LVL_S)) && (mstatus_q.tvm == 1'b1)) || 
+              ((insn_sret && (priv_lvl_q == riscv_pkg::PRIV_LVL_S)) && (mstatus_q.tsr == 1'b1))) begin
+              privilege_violation = 1'b1;
+          end else if (((insn_sfence_vm && (v_mode_q && priv_lvl_q == riscv_pkg::PRIV_LVL_S)) && (hstatus_q.vtvm == 1'b1)) ||
+                       ((insn_hfence_gvma || insn_hfence_vvma) && v_mode_q)) begin
+              virtual_privilege_violation = 1'b1;
+          end
         end else begin
           privilege_violation = 1'b0;
           // if we are reading or writing, check for the correct privilege level this has
@@ -2131,22 +2141,10 @@ module csr_bsc#(
               end
           end
           //checks the level of the system instruction or sfence with tvm = 1 or sret and tsr = 1
-          if (def_pkg::RVH) begin
-            if ((system_insn && !priv_sufficient) || 
-                ((insn_sfence_vm && (priv_lvl_q == riscv_pkg::PRIV_LVL_S)) && (mstatus_q.tvm == 1'b1)) || 
-                ((insn_hfence_gvma && (!v_mode_q && priv_lvl_q == riscv_pkg::PRIV_LVL_S)) && (mstatus_q.tvm == 1'b1)) || 
-                ((insn_sret && (priv_lvl_q == riscv_pkg::PRIV_LVL_S)) && (mstatus_q.tsr == 1'b1))) begin
-                privilege_violation = 1'b1;
-            end else if (((insn_sfence_vm && (v_mode_q && priv_lvl_q == riscv_pkg::PRIV_LVL_S)) && (hstatus_q.vtvm == 1'b1)) ||
-                         ((insn_hfence_gvma || insn_hfence_vvma) && v_mode_q)) begin
-                virtual_privilege_violation = 1'b1;
-            end
-          end else begin
-            if ((system_insn && !priv_sufficient) || 
-                ((insn_sfence_vm && (priv_lvl_q == riscv_pkg::PRIV_LVL_S)) && (mstatus_q.tvm == 1'b1)) || 
-                ((insn_sret && (priv_lvl_q == riscv_pkg::PRIV_LVL_S)) && (mstatus_q.tsr == 1'b1))) begin
-                privilege_violation = 1'b1;
-            end
+          if ((system_insn && !priv_sufficient) || 
+              ((insn_sfence_vm && (priv_lvl_q == riscv_pkg::PRIV_LVL_S)) && (mstatus_q.tvm == 1'b1)) || 
+              ((insn_sret && (priv_lvl_q == riscv_pkg::PRIV_LVL_S)) && (mstatus_q.tsr == 1'b1))) begin
+              privilege_violation = 1'b1;
           end
         end
     end
