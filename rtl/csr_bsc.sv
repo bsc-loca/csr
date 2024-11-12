@@ -41,6 +41,7 @@ module csr_bsc#(
     // RW interface with the core
     input logic [CSR_ADDR_WIDTH-1:0]        rw_addr_i,                  //read and write address form the core
     input logic [3:0]                       rw_cmd_i,                   //specific operation to execute from the core 
+    input logic                             csr_hs_ld_st_inst_i,        //instruction is a Hypervisor Load/Store Instruction
     input logic [WORD_WIDTH-1:0]            w_data_core_i,              //write data from the core
     output logic [WORD_WIDTH-1:0]           r_data_core_o,              // read data to the core, address specified with the rw_addr_i
 
@@ -110,7 +111,8 @@ module csr_bsc#(
     output logic [63:0]                     csr_tval2_o,                // Value written to the tval2 registers
     output logic                            eret_o,
 
-    output logic [WORD_WIDTH-1:0]           status_o,                   //actual mstatus of the core
+    output logic [WORD_WIDTH-1:0]           mstatus_o,                  //actual mstatus of the core
+    output logic [WORD_WIDTH-1:0]           vsstatus_o,                 //actual vsstatus of the core
     output logic [1:0]                      priv_lvl_o,                 // actual privialge level of the core
     output logic                            v_mode_o,                   // Current virtualization mode state the CPU is in
     output logic [1:0]                      ld_st_priv_lvl_o,
@@ -1941,11 +1943,12 @@ module csr_bsc#(
           end else begin
             en_ld_st_g_translation_d = en_g_translation_o;
           end
-    
-          ld_st_priv_lvl_o = (mprv &&  ((~debug_mode_en_q) || dcsr_q.mprven)) ? mstatus_q.mpp : priv_lvl_o;
-          ld_st_v_mode_o = mprv ? mstatus_q.mpv : v_mode_q;
-          en_ld_st_translation_o = en_ld_st_translation_q;
-          en_ld_st_g_translation_o = en_ld_st_g_translation_q;
+              
+          if (csr_hs_ld_st_inst_i) ld_st_priv_lvl_o = riscv_pkg::priv_lvl_t'(hstatus_q.spvp);
+          else ld_st_priv_lvl_o = (mprv &&  ((~debug_mode_en_q) || dcsr_q.mprven)) ? mstatus_q.mpp : priv_lvl_o;
+          ld_st_v_mode_o = ((mprv ? mstatus_q.mpv : v_mode_q) || (csr_hs_ld_st_inst_i));
+          en_ld_st_translation_o = (en_ld_st_translation_q && !csr_hs_ld_st_inst_i) || (vsatp_q.mode == def_pkg::MODE_SV39 && csr_hs_ld_st_inst_i);
+          en_ld_st_g_translation_o = (en_ld_st_g_translation_q && !csr_hs_ld_st_inst_i) || (csr_hs_ld_st_inst_i && hgatp_q.mode == def_pkg::MODE_SV39 && csr_hs_ld_st_inst_i);
         end else begin
           if (mprv && (satp_q.mode == def_pkg::MODE_SV39) && (mstatus_q.mpp != riscv_pkg::PRIV_LVL_M) && ((~debug_mode_en_q) || dcsr_q.mprven)) begin
               en_ld_st_translation_d = 1'b1;
@@ -2411,7 +2414,8 @@ module csr_bsc#(
 	end
     end
     // fcrs assigments
-    assign status_o = mstatus_q;
+    assign mstatus_o  = mstatus_q;
+    assign vsstatus_o = vsstatus_q;
     // in debug mode we execute with privilege level M
     assign priv_lvl_o       = (debug_resume_ack_i) ? dcsr_q.prv : priv_lvl_q;
     assign v_mode_o = def_pkg::RVH ? v_mode_q : 1'b0;
