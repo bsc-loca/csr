@@ -121,6 +121,7 @@ module csr_bsc#(
     output logic                            en_ld_st_g_translation_o,
     output logic                            en_translation_o,
     output logic                            en_g_translation_o,
+    output logic                            csr_hu_o,
 
     output logic [PPN_WIDTH-1:0]            satp_ppn_o,                 // Page table base pointer for the PTW
     output logic [PPN_WIDTH-1:0]            vsatp_ppn_o,                // Page table base pointer for the PTW
@@ -854,6 +855,7 @@ module csr_bsc#(
         eret_o                  = 1'b0;
         flush                   = 1'b0;
         update_access_exception = 1'b0;
+        virtual_update_access_exception = 1'b0;
 
         perf_we_o               = 1'b0;
         perf_data_o             = 'b0;
@@ -1880,39 +1882,38 @@ module csr_bsc#(
             //     mstatus_d.mprv = 1'b0;
             // end
         end 
-        
-        if (sret && !(priv_lvl_q == riscv_pkg::PRIV_LVL_S && mstatus_q.tsr == 1'b1) && ((def_pkg::RVH && !v_mode_q) || !def_pkg::RVH)) begin
-          // return from exception, IF doesn't care from where we are returning
-          eret_o         = 1'b1;
-          // return the previous supervisor interrupt enable flag
-          mstatus_d.sie  = mstatus_q.spie;
-          // restore the previous privilege level
-          priv_lvl_d     = riscv_pkg::priv_lvl_t'({1'b0, mstatus_q.spp});
-          // set spp to user mode
-          mstatus_d.spp  = 1'b0;
-          // set spie to 1
-          mstatus_d.spie = 1'b1;
-          if (def_pkg::RVH) begin
-            // set virtualization mode
-            v_mode_d       = hstatus_q.spv;
-            //set hstatus spv to false
-            hstatus_d.spv  = 1'b0;
-            mstatus_d.mprv = 1'b0;
-          end
-        end
-
-        if (def_pkg::RVH) begin
-          if (sret && !(priv_lvl_q == riscv_pkg::PRIV_LVL_S && mstatus_q.tsr == 1'b1) && v_mode_q) begin
+        else if (sret) begin
+          if (!(priv_lvl_q == riscv_pkg::PRIV_LVL_S && mstatus_q.tsr == 1'b1) && ((def_pkg::RVH && !v_mode_q) || !def_pkg::RVH)) begin
             // return from exception, IF doesn't care from where we are returning
-            eret_o          = 1'b1;
+            eret_o         = 1'b1;
             // return the previous supervisor interrupt enable flag
-            vsstatus_d.sie  = vsstatus_q.spie;
+            mstatus_d.sie  = mstatus_q.spie;
             // restore the previous privilege level
-            priv_lvl_d      = riscv_pkg::priv_lvl_t'({1'b0, vsstatus_q.spp});
+            priv_lvl_d     = riscv_pkg::priv_lvl_t'({1'b0, mstatus_q.spp});
             // set spp to user mode
-            vsstatus_d.spp  = 1'b0;
+            mstatus_d.spp  = 1'b0;
             // set spie to 1
-            vsstatus_d.spie = 1'b1;
+            mstatus_d.spie = 1'b1;
+            if (def_pkg::RVH) begin
+              // set virtualization mode
+              v_mode_d       = hstatus_q.spv;
+              //set hstatus spv to false
+              hstatus_d.spv  = 1'b0;
+              mstatus_d.mprv = 1'b0;
+            end
+          end else if (def_pkg::RVH) begin
+            if (!(priv_lvl_q == riscv_pkg::PRIV_LVL_S && hstatus_q.vtsr == 1'b1) && v_mode_q) begin
+              // return from exception, IF doesn't care from where we are returning
+              eret_o          = 1'b1;
+              // return the previous supervisor interrupt enable flag
+              vsstatus_d.sie  = vsstatus_q.spie;
+              // restore the previous privilege level
+              priv_lvl_d      = riscv_pkg::priv_lvl_t'({1'b0, vsstatus_q.spp});
+              // set spp to user mode
+              vsstatus_d.spp  = 1'b0;
+              // set spie to 1
+              vsstatus_d.spie = 1'b1;
+            end
           end
         end
 
@@ -2113,13 +2114,15 @@ module csr_bsc#(
             end
           end
           //checks the level of the system instruction or sfence with tvm = 1 or sret and tsr = 1
-          if ((system_insn && !priv_sufficient) || 
+          if ((system_insn && !priv_sufficient && !v_mode_q) || 
               ((insn_sfence_vm && (priv_lvl_q == riscv_pkg::PRIV_LVL_S)) && (mstatus_q.tvm == 1'b1)) || 
               ((insn_hfence_gvma && (!v_mode_q && priv_lvl_q == riscv_pkg::PRIV_LVL_S)) && (mstatus_q.tvm == 1'b1)) || 
-              ((insn_sret && (priv_lvl_q == riscv_pkg::PRIV_LVL_S)) && (mstatus_q.tsr == 1'b1))) begin
+              ((insn_sret && (priv_lvl_q == riscv_pkg::PRIV_LVL_S && !v_mode_q)) && (mstatus_q.tsr == 1'b1))) begin
               privilege_violation = 1'b1;
-          end else if (((insn_sfence_vm && (v_mode_q && priv_lvl_q == riscv_pkg::PRIV_LVL_S)) && (hstatus_q.vtvm == 1'b1)) ||
-                       ((insn_hfence_gvma || insn_hfence_vvma) && v_mode_q)) begin
+          end else if ((system_insn && !priv_sufficient && v_mode_q) || 
+                       ((insn_sfence_vm && (v_mode_q && priv_lvl_q == riscv_pkg::PRIV_LVL_S)) && (hstatus_q.vtvm == 1'b1)) ||
+                       ((insn_hfence_gvma || insn_hfence_vvma) && v_mode_q) ||
+                       ((insn_sret && (priv_lvl_q == riscv_pkg::PRIV_LVL_S && v_mode_q)) && (hstatus_q.vtsr == 1'b1))) begin
               virtual_privilege_violation = 1'b1;
           end
         end else begin
@@ -2276,7 +2279,10 @@ module csr_bsc#(
         end else if (insn_wfi && mstatus_q.tw) begin
             csr_xcpt_cause = riscv_pkg::ILLEGAL_INSTR;
             csr_xcpt = 1'b1;
-        end
+        end else if (def_pkg::RVH && insn_wfi && hstatus_q.vtw && v_mode_q && (priv_lvl_q == riscv_pkg::PRIV_LVL_S)) begin
+          csr_xcpt_cause = riscv_pkg::VIRTUAL_INSTRUCTION;
+          csr_xcpt = 1'b1;
+      end
         
         if (def_pkg::RVH && (virtual_update_access_exception || update_access_exception_vs || virtual_read_access_exception || virtual_privilege_violation)) begin
           csr_xcpt_cause = riscv_pkg::VIRTUAL_INSTRUCTION;
@@ -2295,7 +2301,7 @@ module csr_bsc#(
             wfi_d = 1'b0;
         // or alternatively if there is no exception pending and we are not in debug mode wait here
         // for the interrupt
-        end else if (insn_wfi && !ex_i) begin
+        end else if (insn_wfi && !ex_i && !csr_xcpt) begin
             wfi_d = 1'b1;
         end
     end
@@ -2443,11 +2449,13 @@ module csr_bsc#(
                                 priv_lvl_o != riscv_pkg::PRIV_LVL_M && v_mode_q)
                                 ? 1'b1
                                 : 1'b0;
+      assign csr_hu_o = hstatus_q.hu;
     end else begin
       assign en_translation_o = (satp_q.mode == def_pkg::MODE_SV39 && priv_lvl_o != riscv_pkg::PRIV_LVL_M)
                               ? 1'b1
                               : 1'b0;
       assign en_g_translation_o = 1'b0;
+      assign csr_hu_o = 1'b0;
     end
 
     // mprv assignation
