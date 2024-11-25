@@ -1280,7 +1280,7 @@ module csr_bsc#(
                     if (priv_lvl_o == riscv_pkg::PRIV_LVL_S && hstatus_q.vtvm && v_mode_q) begin
                       virtual_update_access_exception = 1'b1;
                     end else begin
-                      vsatp = satp_t'(csr_wdata);
+                      vsatp = riscv_pkg::satp_t'(csr_wdata);
                       // only make ASID_LEN - 1 bit stick, that way software can figure out how many ASID bits are supported
                       vsatp.asid = vsatp.asid & {{(16 - ASID_WIDTH) {1'b0}}, {ASID_WIDTH{1'b1}}};
                       // only update if we actually support this mode
