@@ -130,6 +130,9 @@ module csr_bsc#(
     output logic [63:0]                     evec_o,                      // virtual address of the PC to execute after a Interrupt or exception
 
     output logic                            flush_o,                    // the core is executing a sfence.vm instruction and a tlb flush is needed
+    output logic                            flush_satp_o,               // invalidate tlb entries controlled by the current satp
+    output logic                            flush_vsatp_o,              // invalidate tlb entries controlled by the current vsatp
+    output logic                            flush_hgatp_o,              // invalidate tlb entries controlled by the current hgatp
     output logic [42:0]                     vpu_csr_o,
 
     output logic [CSR_ADDR_WIDTH-1:0]       perf_addr_o,                // read/write address to performance counter module
@@ -323,7 +326,8 @@ module csr_bsc#(
     // flush caused by a sfence instruction
     logic flush_sfence;
     // flush caused by a hfence instruction
-    logic flush_hfence;
+    logic flush_hfence_vvma;
+    logic flush_hfence_gvma;
     
     logic [11:0] perf_addr_dist;
 
@@ -818,7 +822,10 @@ module csr_bsc#(
         automatic riscv_pkg::hgatp_t hgatp; // temporal values to correct the structure of the writing on the hgatp reg
         automatic logic [63:0] instret;
         automatic logic [63:0] mstatus_int, mstatus_clear ,mstatus_set; //Used to set and clear some bits of the mstatus_d
-        automatic logic flush; //temporal flush value befor the exceptions logic
+        automatic logic flush; //temporal flush value before the exceptions logic
+        automatic logic flush_satp;  //temporal flush value before the exceptions logic
+        automatic logic flush_vsatp; //temporal flush value before the exceptions logic
+        automatic logic flush_hgatp; //temporal flush value before the exceptions logic
         automatic logic [63:0] mcause_int; // temporal value of mcause
         automatic logic [63:0] scause_int; // temporal value of scause
         automatic logic [63:0] mtval_int; // temporal value of mtval
@@ -854,6 +861,9 @@ module csr_bsc#(
 
         eret_o                  = 1'b0;
         flush                   = 1'b0;
+        flush_satp              = 1'b0;
+        flush_vsatp             = 1'b0;
+        flush_hgatp             = 1'b0;
         update_access_exception = 1'b0;
         virtual_update_access_exception = 1'b0;
 
@@ -1712,13 +1722,28 @@ module csr_bsc#(
         
         // a sfence is executed and a flush is needed
         if (flush_sfence) begin
+          if(!def_pkg::RVH)
             flush = 1'b1;
+          else begin
+            if(priv_lvl_q == riscv_pkg::PRIV_LVL_S && v_mode_q) //Virtual supervisor mode
+              flush_vsatp = 1'b1;
+            else if(priv_lvl_q == riscv_pkg::PRIV_LVL_S && !v_mode_q) //HS-mode
+              flush_satp = 1'b1;
+            else flush = 1'b1;
+          end
         end
-        // a hfence is executed and a flush is needed (maybe?)
-        if (def_pkg::RVH && flush_hfence) begin
-            flush = 1'b1;
+        // a hfence is executed and a flush is needed
+        if (def_pkg::RVH && flush_hfence_vvma) begin
+            flush_vsatp = 1'b1;
+        end
+        // a hfence is executed and a flush is needed
+        if (def_pkg::RVH && flush_hfence_gvma) begin
+            flush_hgatp = 1'b1;
         end
         flush_o = flush;
+        flush_satp_o = flush_satp;
+        flush_vsatp_o = flush_vsatp;
+        flush_hgatp_o = flush_hgatp;
 
         //Output connection
         interrupt_o = interrupt_q;
@@ -1736,6 +1761,9 @@ module csr_bsc#(
         if ((((ex_cause_i != riscv_pkg::DEBUG_REQUEST) && ex_i) || csr_xcpt) && (~debug_mode_en_q)) begin
             // do not flush, flush is reserved for CSR writes with side effects
             flush_o   = 1'b0;
+            flush_satp_o = 1'b0;
+            flush_vsatp_o = 1'b0;
+            flush_hgatp_o = 1'b0;
             ex_tval = pc_i;
             ex_tval2 = pc_i;
             //tval is the actual pc except for the data access exeptions
@@ -1753,13 +1781,13 @@ module csr_bsc#(
                 ex_tval = 64'b0;
             end
             if(def_pkg::RVH) begin
-              if ((ex_i && (ex_cause_i == riscv_pkg::ILLEGAL_INSTR)) || (csr_xcpt && (csr_xcpt_cause == riscv_pkg::ILLEGAL_INSTR))) begin
-                  ex_tval2 = 64'b0;
-              end else if (csr_xcpt && (csr_xcpt_cause == riscv_pkg::BREAKPOINT)) begin
-                  ex_tval2 = pc_i;
-              end else begin
-                ex_tval2 = ex_origin2_i;
-              end
+                if ((ex_i && (ex_cause_i == riscv_pkg::ILLEGAL_INSTR)) || (csr_xcpt && (csr_xcpt_cause == riscv_pkg::ILLEGAL_INSTR))) begin
+                    ex_tval2 = 64'b0;
+                end else if (csr_xcpt && (csr_xcpt_cause == riscv_pkg::BREAKPOINT)) begin
+                    ex_tval2 = pc_i;
+                end else begin
+                    ex_tval2 = ex_origin2_i;
+                end
             end
             // figure out where to trap to
             // a m-mode trap might be delegated if we are taking it in S mode
@@ -2054,7 +2082,8 @@ module csr_bsc#(
     // ---------------------------
     always_comb begin : csr_op_logic
         flush_sfence = 1'b0;
-        if(def_pkg::RVH) flush_hfence = 1'b0;
+        if(def_pkg::RVH) flush_hfence_vvma = 1'b0;
+        if(def_pkg::RVH) flush_hfence_gvma = 1'b0;
         csr_wdata = w_data_core_i;
         csr_we    = 1'b1;
         csr_read  = 1'b1;
@@ -2080,10 +2109,10 @@ module csr_bsc#(
             mret     = 1'b1; // signal a return from machine mode
         end else if (insn_sfence_vm) begin // flush_o can not be changed here, it changes in csr_update process
             flush_sfence = 1'b1;
-        end else if (def_pkg::RVH && insn_hfence_vvma) begin // (<==maybe?) flush_o can not be changed here, it changes in csr_update process
-            flush_hfence = 1'b1;
-        end else if (def_pkg::RVH && insn_hfence_gvma) begin // (<==maybe?) flush_o can not be changed here, it changes in csr_update process
-            flush_hfence = 1'b1;
+        end else if (def_pkg::RVH && insn_hfence_vvma) begin // flush_o can not be changed here, it changes in csr_update process
+            flush_hfence_vvma = 1'b1;
+        end else if (def_pkg::RVH && insn_hfence_gvma) begin // flush_o can not be changed here, it changes in csr_update process
+            flush_hfence_gvma = 1'b1;
         end
         // if we are violating our privilges do not update the architectural state
         if (privilege_violation) begin
