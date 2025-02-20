@@ -143,9 +143,8 @@ module hpm_counters
                 if (mhpmcounter_idx < (HPM_NUM_COUNTERS + 3)) begin
                     if (we_i) begin
                         mhpmcounter_d[mhpmcounter_idx] = data_i;
-                    end else begin
-                        data_o = mhpmcounter_q[mhpmcounter_idx];
                     end
+                    data_o = mhpmcounter_q[mhpmcounter_idx];
                 end 
             end
 
@@ -181,9 +180,8 @@ module hpm_counters
                 if (mhpmevent_idx < (HPM_NUM_COUNTERS + 3)) begin
                     if (we_i) begin
                         mhpmevent_d[mhpmevent_idx] = data_i;
-                    end else begin
-                        data_o = mhpmevent_q[mhpmevent_idx];
                     end
+                    data_o = mhpmevent_q[mhpmevent_idx];
                 end
             end
             default: data_o = 'h0;
