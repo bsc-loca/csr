@@ -1620,8 +1620,8 @@ module csr_bsc#(
     always_comb begin : wfi_ctrl
         // wait for interrupt register
         wfi_d = wfi_q;
-        // if there is any interrupt pending un-stall the core
-        if ((|mip_q) || irq_q[0] || irq_q[1] || debug_halt_req_i) begin
+        // if there is any interrupt pending and it is individually enabled un-stall the core
+        if ((((|mip_q) || irq_q[0] || irq_q[1]) && interrupt_cause[63]) || debug_halt_req_i) begin
             wfi_d = 1'b0;
         // or alternatively if there is no exception pending and we are not in debug mode wait here
         // for the interrupt
