@@ -1541,7 +1541,7 @@ module csr_bsc#(
                     if ((vtype_new[10:8] != 6'b0)) begin // unsupported SEW,LMUL configuration (rvv1.0 page 11)
                         vtype_d = {1'b1,63'b0};
                     end else begin
-                        vtype_d = {'0,vtype_new};
+                        vtype_d = {53'b0,vtype_new};
                     end
                 end else begin
                 // vtype assignation
@@ -1550,7 +1550,7 @@ module csr_bsc#(
                         vtype_d = {1'b1,63'b0};
                         vl_d = 'h0;
                     end else begin
-                        vtype_d = {'0,vtype_new};
+                        vtype_d = {53'b0,vtype_new};
                     end
                 end
             
@@ -1677,13 +1677,13 @@ module csr_bsc#(
     always_comb begin : priv_output
         // vectorized trap addres
         trap_vector_base[63:8] = mtvec_q[63:8];
-        trap_vector_base[7:2] = ((mtvec_q[1:0] == 2'b0) || csr_xcpt || !ex_cause_i[63]) ? mtvec_q[7:2] : csr_xcpt ? trunc_sum_6bits(mtvec_q[7:2] + csr_xcpt_cause[5:0]) : trunc_sum_6bits(mtvec_q[7:2] + ex_cause_i[5:0]);
+        trap_vector_base[7:2] = ((mtvec_q[1:0] == 2'b0) || csr_xcpt || !ex_cause_i[63]) ? mtvec_q[7:2] : trunc_sum_6bits(mtvec_q[7:2] + ex_cause_i[5:0]);
         trap_vector_base[1:0] = 2'b0;
         // output user mode stvec
         if (trap_to_priv_lvl == riscv_pkg::PRIV_LVL_S) begin
             // vectorized trap addres
             trap_vector_base[63:8] = stvec_q[63:8];
-            trap_vector_base[7:2] = ((stvec_q[1:0] == 2'b0) || csr_xcpt || !ex_cause_i[63]) ? stvec_q[7:2] : csr_xcpt ? trunc_sum_6bits(mtvec_q[7:2] + csr_xcpt_cause[5:0]) : trunc_sum_6bits(mtvec_q[7:2] + ex_cause_i[5:0]);
+            trap_vector_base[7:2] = ((stvec_q[1:0] == 2'b0) || csr_xcpt || !ex_cause_i[63]) ? stvec_q[7:2] : trunc_sum_6bits(mtvec_q[7:2] + ex_cause_i[5:0]);
             trap_vector_base[1:0] = 2'b0;
         end
 
