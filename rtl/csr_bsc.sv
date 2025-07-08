@@ -948,7 +948,7 @@ module csr_bsc#(
                 riscv_pkg::CSR_MCOUNTEREN:         mcounteren_d = csr_wdata[31:0];
                 riscv_pkg::CSR_MCOUNTINHIBIT:      mcountinhibit_d = csr_wdata[31:0];
                 riscv_pkg::CSR_MSCRATCH:           mscratch_d  = csr_wdata;
-                riscv_pkg::CSR_MEPC:               mepc_int    = {csr_wdata[63:1], 1'b0};
+                riscv_pkg::CSR_MEPC:               mepc_int    = {csr_wdata[63:2], 2'b0}; // we only support IALIGN=32 since we do not support C extension
                 riscv_pkg::CSR_MCAUSE:             mcause_int  = csr_wdata;
                 riscv_pkg::CSR_MTVAL:              mtval_int   = csr_wdata;
                 riscv_pkg::CSR_MENVCFG:            menvcfg_d   = csr_wdata;
@@ -1259,7 +1259,8 @@ module csr_bsc#(
             if (ex_i && ex_cause_i inside {riscv_pkg::LD_ADDR_MISALIGNED, riscv_pkg::LD_ACCESS_FAULT, 
                                     riscv_pkg::ST_AMO_ADDR_MISALIGNED, riscv_pkg::ST_AMO_ACCESS_FAULT,
                                     riscv_pkg::LD_PAGE_FAULT, riscv_pkg::ST_AMO_PAGE_FAULT,
-                                    riscv_pkg::INSTR_PAGE_FAULT, riscv_pkg::INSTR_ADDR_MISALIGNED}) begin
+                                    riscv_pkg::INSTR_PAGE_FAULT, riscv_pkg::INSTR_ADDR_MISALIGNED,
+                                    riscv_pkg::INSTR_ACCESS_FAULT}) begin
                 ex_tval = ex_origin_i;
             end else if ((ex_i && (ex_cause_i == riscv_pkg::ILLEGAL_INSTR)) || (csr_xcpt && (csr_xcpt_cause == riscv_pkg::ILLEGAL_INSTR))) begin
                 ex_tval = 64'b0;
