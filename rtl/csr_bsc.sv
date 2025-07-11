@@ -1263,7 +1263,7 @@ module csr_bsc#(
                                     riscv_pkg::INSTR_ACCESS_FAULT}) begin
                 ex_tval = ex_origin_i;
             end else if ((ex_i && (ex_cause_i == riscv_pkg::ILLEGAL_INSTR)) || (csr_xcpt && (csr_xcpt_cause == riscv_pkg::ILLEGAL_INSTR))) begin
-                ex_tval = 64'b0;
+                ex_tval = ex_origin_i;
 	        end else if (csr_xcpt && (csr_xcpt_cause == riscv_pkg::BREAKPOINT)) begin
                 ex_tval = pc_i;
             end else begin
