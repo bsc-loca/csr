@@ -83,6 +83,10 @@ module csr_bsc#(
     output logic  [WORD_WIDTH-1:0]          pcr_req_core_id_o,          // core id of the tile
 `endif // CONF_SARGANTANA_ENABLE_PCR
 
+`ifdef CONF_SARGANTANA_ENABLE_DYN_FPGA_MEM_LATENCY
+    output logic [63:0]                     dyn_fpga_mem_latency_o,
+`endif // CONF_SARGANTANA_ENABLE_DYN_FPGA_MEM_LATENCY
+
     // floating point flags
     input logic                             freg_modified_i,
     input logic                             fcsr_flags_valid_i,
@@ -249,6 +253,10 @@ module csr_bsc#(
         logic cpu_ren; // is needed a read to the csr (write, read, set and clear)
         logic pcr_addr_valid; // the address requested is a pcr address.
     `endif // CONF_SARGANTANA_ENABLE_PCR
+
+    `ifdef CONF_SARGANTANA_ENABLE_DYN_FPGA_MEM_LATENCY
+        logic [63:0] dyn_fpga_mem_latency_d, dyn_fpga_mem_latency_q;
+    `endif // CONF_SARGANTANA_ENABLE_DYN_FPGA_MEM_LATENCY
 
     //interruption wires
     logic [63:0] interrupt_cause_q, interrupt_cause_d, interrupt_cause;
@@ -607,6 +615,11 @@ module csr_bsc#(
                 end
                 `endif // CONF_SARGANTANA_ENABLE_PCR
 
+                `ifdef CONF_SARGANTANA_ENABLE_DYN_FPGA_MEM_LATENCY
+                riscv_pkg::CSR_DYN_MEM_LATENCY:
+                    csr_rdata = dyn_fpga_mem_latency_q;
+                `endif
+
                 riscv_pkg::CSR_PMPCFG_0:;
                 riscv_pkg::CSR_PMPCFG_1:;
                 riscv_pkg::CSR_PMPCFG_2:;
@@ -766,6 +779,10 @@ module csr_bsc#(
         `ifdef CONF_SARGANTANA_ENABLE_PCR
             pcr_req_data_o          = 'b0;
         `endif // CONF_SARGANTANA_ENABLE_PCR
+
+        `ifdef CONF_SARGANTANA_ENABLE_DYN_FPGA_MEM_LATENCY
+            dyn_fpga_mem_latency_d = dyn_fpga_mem_latency_q;
+        `endif
 
         mask                    = 64'h0;
         satp_temp='0;
@@ -1119,6 +1136,11 @@ module csr_bsc#(
                         pcr_req_data_o = csr_wdata;
                 end
                 `endif // CONF_SARGANTANA_ENABLE_PCR
+
+                `ifdef CONF_SARGANTANA_ENABLE_DYN_FPGA_MEM_LATENCY
+                riscv_pkg::CSR_DYN_MEM_LATENCY:
+                    dyn_fpga_mem_latency_d = csr_wdata;
+                `endif
 
                 riscv_pkg::CSR_PMPCFG_0:;
                 riscv_pkg::CSR_PMPCFG_1:;
@@ -1673,6 +1695,9 @@ module csr_bsc#(
     assign csr_stall_o = wfi_q;
 `endif // CONF_SARGANTANA_ENABLE_PCR
 
+`ifdef CONF_SARGANTANA_ENABLE_DYN_FPGA_MEM_LATENCY
+    assign dyn_fpga_mem_latency_o = dyn_fpga_mem_latency_q;
+`endif // CONF_SARGANTANA_ENABLE_DYN_FPGA_MEM_LATENCY
 
     // output assignments dependent on privilege mode
     always_comb begin : priv_output
@@ -1816,6 +1841,10 @@ module csr_bsc#(
                 pcr_wait_resp_q <= 1'b0;
             `endif // CONF_SARGANTANA_ENABLE_PCR
 
+            `ifdef CONF_SARGANTANA_ENABLE_DYN_FPGA_MEM_LATENCY
+                dyn_fpga_mem_latency_q <= '0;
+            `endif // CONF_SARGANTANA_ENABLE_DYN_FPGA_MEM_LATENCY
+
             reg_time_q <= 64'b0;
 
             //Interrupt assigments
@@ -1876,6 +1905,10 @@ module csr_bsc#(
                 // PCR assigments
                 pcr_wait_resp_q <= pcr_wait_resp_d;
             `endif // CONF_SARGANTANA_ENABLE_PCR
+
+            `ifdef CONF_SARGANTANA_ENABLE_DYN_FPGA_MEM_LATENCY
+                dyn_fpga_mem_latency_q <= dyn_fpga_mem_latency_d;
+            `endif // CONF_SARGANTANA_ENABLE_DYN_FPGA_MEM_LATENCY
 
             reg_time_q <= reg_time_d; 
 
