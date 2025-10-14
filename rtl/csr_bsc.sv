@@ -993,7 +993,6 @@ module csr_bsc#(
                         dirty_fp_state_csr = 1'b1;
                         fcsr_d.fflags = csr_wdata[4:0];
                         // this instruction has side-effects
-                        flush = 1'b1;
                     end
                 end
                 riscv_pkg::CSR_FRM: begin
@@ -1003,7 +1002,6 @@ module csr_bsc#(
                         dirty_fp_state_csr = 1'b1;
                         fcsr_d.frm    = csr_wdata[2:0];
                         // this instruction has side-effects
-                        flush = 1'b1;
                     end
                 end
                 riscv_pkg::CSR_FCSR: begin
@@ -1013,7 +1011,6 @@ module csr_bsc#(
                         dirty_fp_state_csr = 1'b1;
                         fcsr_d[7:0] = csr_wdata[7:0]; // ignore writes to reserved space
                         // this instruction has side-effects
-                        flush = 1'b1;
                     end
                 end
                 riscv_pkg::CSR_VXSAT: begin
@@ -1023,7 +1020,6 @@ module csr_bsc#(
                         dirty_v_state_csr  = 1'b1;
                         vcsr_d.vxsat    = csr_wdata[0];
                         // this instruction has side-effects
-                        flush = 1'b1;
                     end
                     
                 end
@@ -1035,7 +1031,6 @@ module csr_bsc#(
                         vcsr_d.vxrm    = csr_wdata[1:0];
 
                         // this instruction has side-effects
-                        flush = 1'b1;
                     end
                 end
                 riscv_pkg::CSR_VCSR: begin
@@ -1046,7 +1041,6 @@ module csr_bsc#(
                         vcsr_d.vxsat = csr_wdata[0];
                         vcsr_d.vxrm = csr_wdata[2:1];
                         // this instruction has side-effects
-                        flush = 1'b1;
                     end
                 end
                 riscv_pkg::CSR_VSTART: begin
@@ -1081,7 +1075,6 @@ module csr_bsc#(
                       end
                     end
                     // this instruction has side-effects
-                    flush = 1'b1;
                 end
                 // even machine mode interrupts can be visible and set-able to supervisor
                 // if the corresponding bit in mideleg is set
@@ -1121,7 +1114,6 @@ module csr_bsc#(
                     end
                     // changing the mode can have side-effects on address translation (e.g.: other instructions), re-fetch
                     // the next instruction by executing a flush
-                    flush = 1'b1;
                 end
 
                 //hypervisor mode registers
@@ -1130,7 +1122,6 @@ module csr_bsc#(
                       mask      = def_pkg::HSTATUS_WRITE_MASK;
                       hstatus_d = (hstatus_q & ~mask) | (csr_wdata & mask);
                       // this register has side-effects on other registers, flush the pipeline
-                      flush     = 1'b1;
                     end else begin
                       update_access_exception = 1'b1;
                     end
@@ -1230,7 +1221,6 @@ module csr_bsc#(
                     end
                     // changing the mode can have side-effects on address translation (e.g.: other instructions), re-fetch
                     // the next instruction by executing a flush
-                    flush = 1'b1;
                   end else begin
                     update_access_exception = 1'b1;
                   end
@@ -1243,7 +1233,6 @@ module csr_bsc#(
                     vsstatus_d    = (vsstatus_q & ~mask) | (csr_wdata & mask);
                     vsstatus_d.xs = riscv_pkg::Off;
                     // this register has side-effects on other registers, flush the pipeline
-                    flush        = 1'b1;
                   end else begin
                     update_access_exception = 1'b1;
                   end
@@ -1293,7 +1282,6 @@ module csr_bsc#(
                     end
                     // changing the mode can have side-effects on address translation (e.g.: other instructions), re-fetch
                     // the next instruction by executing a flush
-                    flush = 1'b1;
                   end else begin
                     update_access_exception = 1'b1;
                   end
@@ -1310,7 +1298,6 @@ module csr_bsc#(
                       end
                     end
                     // this register has side-effects on other registers, flush the pipeline
-                    flush        = 1'b1;
                 end
                 // MISA is WARL (Write Any Value, Reads Legal Value)
                 riscv_pkg::CSR_MISA:;
