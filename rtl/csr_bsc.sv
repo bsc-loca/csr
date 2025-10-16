@@ -516,7 +516,7 @@ module csr_bsc#(
                     if (def_pkg::RVH)   csr_rdata = mip_q & def_pkg::HS_DELEG_INTERRUPTS;
                     else                read_access_exception = 1'b1;
                 riscv_pkg::CSR_HIE:
-                    if (def_pkg::RVH)   csr_rdata = mie_q & def_pkg::HS_DELEG_INTERRUPTS;
+                    if (def_pkg::RVH)   csr_rdata = mie_q & def_pkg::HS_DELEG_INTERRUPTS | riscv_pkg::MIP_SGEIP;
                     else                read_access_exception = 1'b1;
                 riscv_pkg::CSR_HGEIP:
                     if (def_pkg::RVH)   csr_rdata = 64'h0;
@@ -1177,7 +1177,7 @@ module csr_bsc#(
                 end
                 riscv_pkg::CSR_HIE: begin
                   if (def_pkg::RVH) begin
-                    mask  = def_pkg::HS_DELEG_INTERRUPTS;
+                    mask  = def_pkg::HS_DELEG_INTERRUPTS | riscv_pkg::MIP_SGEIP;
                     mie_d = (mie_q & ~mask) | (csr_wdata & mask);
                   end else begin
                     update_access_exception = 1'b1;
@@ -1337,7 +1337,8 @@ module csr_bsc#(
                   if (def_pkg::RVH) begin
                     mask = def_pkg::HS_DELEG_INTERRUPTS
                          | riscv_pkg::MIP_SSIP | riscv_pkg::MIP_STIP | riscv_pkg::MIP_SEIP
-                         | riscv_pkg::MIP_MSIP | riscv_pkg::MIP_MTIP | riscv_pkg::MIP_MEIP;
+                         | riscv_pkg::MIP_MSIP | riscv_pkg::MIP_MTIP | riscv_pkg::MIP_MEIP
+                         | riscv_pkg::MIP_SGEIP;
                   end else begin
                       mask = riscv_pkg::MIP_SSIP | riscv_pkg::MIP_STIP | riscv_pkg::MIP_SEIP
                            | riscv_pkg::MIP_MSIP | riscv_pkg::MIP_MTIP | riscv_pkg::MIP_MEIP;
@@ -1693,7 +1694,7 @@ module csr_bsc#(
                 end else if (def_pkg::RVH && v_mode_q && ((vsstatus_q.sie && (priv_lvl_q == riscv_pkg::PRIV_LVL_S)) || (priv_lvl_q == riscv_pkg::PRIV_LVL_U))) begin
                   interrupt_d = 1'b1;
                   interrupt_cause_d = interrupt_cause;
-                  interrupt_cause_d[5:0] = interrupt_cause[5:0] >> 1;
+                  interrupt_cause_d[5:0] = interrupt_cause[5:0] - 1;
                 end
             end else begin
                 interrupt_d = 1'b1;
@@ -1775,30 +1776,38 @@ module csr_bsc#(
             // first figure out if this was an exception or an interrupt e.g.: look at bit (XLEN-1)
             // the cause register can only be $clog2(XLEN) bits long (as we only support XLEN exceptions)
             if (def_pkg::RVH) begin
-                if ((ex_i &&((ex_cause_i[63] && mideleg_q[ex_cause_i[5:0]] && ~((~v_mode_q && hideleg_q[ex_cause_i[5:0]]) || (v_mode_q && hideleg_q[{ex_cause_i[4:0], 1'b0}])))
-                        || (~ex_cause_i[63] && medeleg_q[ex_cause_i[5:0]] && ~hedeleg_q[ex_cause_i[5:0]])))
-                        || (csr_xcpt &&((csr_xcpt_cause[63] && mideleg_q[csr_xcpt_cause[5:0]] && ~((~v_mode_q && hideleg_q[csr_xcpt_cause[5:0]]) || (v_mode_q && hideleg_q[{csr_xcpt_cause[4:0], 1'b0}])))
-                        || (~csr_xcpt_cause[63] && medeleg_q[csr_xcpt_cause[5:0]] && ~hedeleg_q[csr_xcpt_cause[5:0]])))) begin
+                    if(ex_i && (
+                        (ex_cause_i[63] && mideleg_q[interrupt_cause[5:0]]) || // Check original interrupt cause
+                        (~ex_cause_i[63] && medeleg_q[ex_cause_i[5:0]]))
+                    ) begin
+                        trap_to_priv_lvl = (priv_lvl_o == riscv_pkg::PRIV_LVL_M) ? riscv_pkg::PRIV_LVL_M : riscv_pkg::PRIV_LVL_S;
+                        if(
+                            (ex_cause_i[63] && hideleg_q[interrupt_cause[5:0]]) || // Check original interrupt cause
+                            (~ex_cause_i[63] && hedeleg_q[ex_cause_i[5:0]])
+                        ) begin
+                            trap_to_v_mode = v_mode_q;
+                        end
+                    end else if (csr_xcpt && (
+                        (csr_xcpt_cause[63] && mideleg_q[interrupt_cause[5:0]]) || // Check original interrupt cause
+                        (~csr_xcpt_cause[63] && medeleg_q[csr_xcpt_cause[5:0]]))
+                    ) begin
+                        trap_to_priv_lvl = (priv_lvl_o == riscv_pkg::PRIV_LVL_M) ? riscv_pkg::PRIV_LVL_M : riscv_pkg::PRIV_LVL_S;
+                        if(
+                            (csr_xcpt_cause[63] && hideleg_q[interrupt_cause[5:0]]) || // Check original interrupt cause
+                            (~csr_xcpt_cause[63] && hedeleg_q[csr_xcpt_cause[5:0]])
+                        ) begin
+                            trap_to_v_mode = v_mode_q;
+                        end
+                    end
+            end else begin
+                if ((ex_i &&((ex_cause_i[63] && mideleg_q[interrupt_cause[5:0]]) ||  // Check original interrupt cause
+                    (~ex_cause_i[63] && medeleg_q[ex_cause_i[5:0]]))) ||
+                    (csr_xcpt && ((csr_xcpt_cause[63] && mideleg_q[interrupt_cause[5:0]]) ||  // Check original interrupt cause
+                    (~csr_xcpt_cause[63] && medeleg_q[csr_xcpt_cause[5:0]])))) begin
                     // traps never transition from a more-privileged mode to a less privileged mode
                     // so if we are already in M mode, stay there
                     trap_to_priv_lvl = (priv_lvl_o == riscv_pkg::PRIV_LVL_M) ? riscv_pkg::PRIV_LVL_M : riscv_pkg::PRIV_LVL_S;
-                end else if ((ex_i &&((ex_cause_i[63] && ((~v_mode_q && hideleg_q[ex_cause_i[5:0]]) || (v_mode_q && hideleg_q[{ex_cause_i[4:0], 1'b0}])))
-                                || (~ex_cause_i[63] && hedeleg_q[ex_cause_i[5:0]])))
-                                || (csr_xcpt &&((csr_xcpt_cause[63] && ((~v_mode_q && hideleg_q[csr_xcpt_cause[5:0]]) || (v_mode_q && hideleg_q[{csr_xcpt_cause[4:0], 1'b0}])))
-                                || (~csr_xcpt_cause[63] && hedeleg_q[csr_xcpt_cause[5:0]])))) begin
-                    trap_to_priv_lvl = (priv_lvl_o == riscv_pkg::PRIV_LVL_M) ? riscv_pkg::PRIV_LVL_M : riscv_pkg::PRIV_LVL_S;
-                    // trap to VS only if it is  the currently active mode
-                    trap_to_v_mode = v_mode_q;
                 end
-                end else begin
-                    if ((ex_i &&((ex_cause_i[63] && mideleg_q[ex_cause_i[5:0]]) ||
-                        (~ex_cause_i[63] && medeleg_q[ex_cause_i[5:0]]))) ||
-                        (csr_xcpt && ((csr_xcpt_cause[63] && mideleg_q[csr_xcpt_cause[5:0]]) ||
-                        (~csr_xcpt_cause[63] && medeleg_q[csr_xcpt_cause[5:0]])))) begin
-                            // traps never transition from a more-privileged mode to a less privileged mode
-                            // so if we are already in M mode, stay there
-                            trap_to_priv_lvl = (priv_lvl_o == riscv_pkg::PRIV_LVL_M) ? riscv_pkg::PRIV_LVL_M : riscv_pkg::PRIV_LVL_S;
-                    end
             end
     
           // trap to supervisor mode
