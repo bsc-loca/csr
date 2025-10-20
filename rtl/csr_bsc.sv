@@ -517,7 +517,7 @@ module csr_bsc#(
                     if (def_pkg::RVH)   csr_rdata = mip_q & def_pkg::HS_DELEG_INTERRUPTS;
                     else                read_access_exception = 1'b1;
                 riscv_pkg::CSR_HIE:
-                    if (def_pkg::RVH)   csr_rdata = mie_q & def_pkg::HS_DELEG_INTERRUPTS | riscv_pkg::MIP_SGEIP;
+                    if (def_pkg::RVH)   csr_rdata = mie_q & def_pkg::HS_DELEG_INTERRUPTS;
                     else                read_access_exception = 1'b1;
                 riscv_pkg::CSR_HGEIP:
                     if (def_pkg::RVH)   csr_rdata = 64'h0;
@@ -1188,7 +1188,7 @@ module csr_bsc#(
                 end
                 riscv_pkg::CSR_HIE: begin
                   if (def_pkg::RVH) begin
-                    mask  = def_pkg::HS_DELEG_INTERRUPTS | riscv_pkg::MIP_SGEIP;
+                    mask  = def_pkg::HS_DELEG_INTERRUPTS;
                     mie_d = (mie_q & ~mask) | (csr_wdata & mask);
                   end else begin
                     update_access_exception = 1'b1;
@@ -1352,8 +1352,7 @@ module csr_bsc#(
                   if (def_pkg::RVH) begin
                     mask = def_pkg::HS_DELEG_INTERRUPTS
                          | riscv_pkg::MIP_SSIP | riscv_pkg::MIP_STIP | riscv_pkg::MIP_SEIP
-                         | riscv_pkg::MIP_MSIP | riscv_pkg::MIP_MTIP | riscv_pkg::MIP_MEIP
-                         | riscv_pkg::MIP_SGEIP;
+                         | riscv_pkg::MIP_MSIP | riscv_pkg::MIP_MTIP | riscv_pkg::MIP_MEIP;
                   end else begin
                       mask = riscv_pkg::MIP_SSIP | riscv_pkg::MIP_STIP | riscv_pkg::MIP_SEIP
                            | riscv_pkg::MIP_MSIP | riscv_pkg::MIP_MTIP | riscv_pkg::MIP_MEIP;
