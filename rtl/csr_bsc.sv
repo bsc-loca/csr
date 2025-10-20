@@ -208,6 +208,7 @@ module csr_bsc#(
     logic [31:0] hcounteren_q,hcounteren_d;
     logic [63:0] htval_q,     htval_d;
     logic [63:0] htinst_q,    htinst_d;
+    logic [63:0] htimedelta_q,htimedelta_d;
     
     logic [63:0] vstvec_q,    vstvec_d;
     logic [63:0] vsscratch_q, vsscratch_d;
@@ -548,6 +549,9 @@ module csr_bsc#(
                     read_access_exception = 1'b1;
                   end
                 end
+                riscv_pkg::CSR_HTIMEDELTA:
+                    if (def_pkg::RVH)   csr_rdata = htimedelta_q;
+                    else                read_access_exception = 1'b1;
 
                 // virtual supervisor mode registers
                 riscv_pkg::CSR_VSSTATUS:
@@ -649,7 +653,13 @@ module csr_bsc#(
                 end
 
                 riscv_pkg::CSR_CYCLE:              csr_rdata = cycle_q;
-                riscv_pkg::CSR_TIME:               csr_rdata = reg_time_q;
+                riscv_pkg::CSR_TIME: begin
+                    csr_rdata = reg_time_q;
+                    if(def_pkg::RVH) begin
+                        if (v_mode_q && ((priv_lvl_q == riscv_pkg::PRIV_LVL_S) || (priv_lvl_q == riscv_pkg::PRIV_LVL_U)))
+                            csr_rdata = reg_time_q + htimedelta_q;
+                    end
+                end
                 riscv_pkg::CSR_INSTRET:            csr_rdata = instret_q;
                 riscv_pkg::CSR_HPM_COUNTER_3,
                 riscv_pkg::CSR_HPM_COUNTER_4,
@@ -930,6 +940,7 @@ module csr_bsc#(
         htinst_d                = (def_pkg::RVH) ? htinst_q     : 0;
         htval_d                 = (def_pkg::RVH) ? htval_q      : 0;
         hgatp_d                 = (def_pkg::RVH) ? hgatp_q      : 0;
+        htimedelta_d            = (def_pkg::RVH) ? htimedelta_q : 0;
 
         vstvec_d                = (def_pkg::RVH) ? vstvec_q     : 0;
         vsscratch_d             = (def_pkg::RVH) ? vsscratch_q  : 0;
@@ -1224,6 +1235,10 @@ module csr_bsc#(
                   end else begin
                     update_access_exception = 1'b1;
                   end
+                end
+                riscv_pkg::CSR_HTIMEDELTA: begin
+                    if (def_pkg::RVH)   htimedelta_d = csr_wdata;
+                    else                update_access_exception = 1'b1;
                 end
                 
                 // virtual supervisor registers
@@ -2528,6 +2543,7 @@ module csr_bsc#(
               htval_q                <= 64'b0;
               hgatp_q                <= 64'b0;
               htinst_q               <= 64'b0;
+              htimedelta_q           <= 64'b0;
               // virtual supervisor mode registers
               vsstatus_q             <= 64'b011000000000;
               vstvec_q               <= 64'b0;
@@ -2617,6 +2633,7 @@ module csr_bsc#(
               htval_q                <= htval_d;
               hgatp_q                <= hgatp_d;
               htinst_q               <= htinst_d;
+              htimedelta_q           <= htimedelta_d;
               // virtual supervisor mode registers
               vsstatus_q             <= vsstatus_d;
               vstvec_q               <= vstvec_d;
