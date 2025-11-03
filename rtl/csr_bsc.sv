@@ -1766,8 +1766,9 @@ module csr_bsc#(
             if (ex_i && ex_cause_i inside {riscv_pkg::LD_ADDR_MISALIGNED, riscv_pkg::LD_ACCESS_FAULT, 
                                     riscv_pkg::ST_AMO_ADDR_MISALIGNED, riscv_pkg::ST_AMO_ACCESS_FAULT,
                                     riscv_pkg::LD_PAGE_FAULT, riscv_pkg::ST_AMO_PAGE_FAULT,
+                                    riscv_pkg::LD_GUEST_PAGE_FAULT, riscv_pkg::ST_GUEST_AMO_PAGE_FAULT,
                                     riscv_pkg::INSTR_PAGE_FAULT, riscv_pkg::INSTR_ADDR_MISALIGNED,
-                                    riscv_pkg::INSTR_ACCESS_FAULT}) begin
+                                    riscv_pkg::INSTR_GUEST_PAGE_FAULT, riscv_pkg::INSTR_ACCESS_FAULT}) begin
                 ex_tval = ex_origin_i;
             end else if ((ex_i && (ex_cause_i == riscv_pkg::ILLEGAL_INSTR)) || (csr_xcpt && (csr_xcpt_cause == riscv_pkg::ILLEGAL_INSTR))) begin
                 ex_tval = ex_origin_i;
