@@ -1340,7 +1340,7 @@ module csr_bsc#(
                 // machine interrupt delegation register
                 // we do not support user interrupt delegation
                 riscv_pkg::CSR_MIDELEG: begin
-                    mask = riscv_pkg::MIP_SSIP | riscv_pkg::MIP_STIP | riscv_pkg::MIP_SEIP;
+                    mask = riscv_pkg::MIP_SSIP | riscv_pkg::MIP_STIP | riscv_pkg::MIP_SEIP | riscv_pkg::MIP_LCOFIP;
                     if (def_pkg::RVH) begin
                       mideleg_d = (mideleg_q & ~mask) | (csr_wdata & mask) | def_pkg::HS_DELEG_INTERRUPTS;
                     end else begin
@@ -1352,10 +1352,12 @@ module csr_bsc#(
                   if (def_pkg::RVH) begin
                     mask = def_pkg::HS_DELEG_INTERRUPTS
                          | riscv_pkg::MIP_SSIP | riscv_pkg::MIP_STIP | riscv_pkg::MIP_SEIP
-                         | riscv_pkg::MIP_MSIP | riscv_pkg::MIP_MTIP | riscv_pkg::MIP_MEIP;
+                         | riscv_pkg::MIP_MSIP | riscv_pkg::MIP_MTIP | riscv_pkg::MIP_MEIP
+                         | riscv_pkg::MIP_LCOFIP;
                   end else begin
                       mask = riscv_pkg::MIP_SSIP | riscv_pkg::MIP_STIP | riscv_pkg::MIP_SEIP
-                           | riscv_pkg::MIP_MSIP | riscv_pkg::MIP_MTIP | riscv_pkg::MIP_MEIP;
+                           | riscv_pkg::MIP_MSIP | riscv_pkg::MIP_MTIP | riscv_pkg::MIP_MEIP
+                           | riscv_pkg::MIP_LCOFIP;
                   end
                   mie_d = (mie_q & ~mask) | (csr_wdata & mask); // we only support supervisor and M-mode interrupts
                 end
@@ -1383,9 +1385,10 @@ module csr_bsc#(
                     mask = riscv_pkg::MIP_SSIP
                          | riscv_pkg::MIP_STIP
                          | riscv_pkg::MIP_SEIP
+                         | riscv_pkg::MIP_LCOFIP
                          | riscv_pkg::MIP_VSSIP;
                   end else begin
-                    mask = riscv_pkg::MIP_SSIP | riscv_pkg::MIP_STIP | riscv_pkg::MIP_SEIP;
+                    mask = riscv_pkg::MIP_SSIP | riscv_pkg::MIP_STIP | riscv_pkg::MIP_SEIP | riscv_pkg::MIP_LCOFIP;
                   end
                   mip_d = (mip_q & ~mask) | (csr_wdata & mask);
                 end
