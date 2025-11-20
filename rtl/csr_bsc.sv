@@ -99,6 +99,11 @@ module csr_bsc#(
     output logic [2:0]                      fcsr_rm_o,
     output logic [1:0]                      fcsr_fs_o,
 
+    // CMO conf flag
+    output logic [3:0]                      csr_m_cmo_cfg_o,           // M mode cmo related flags (CBIE, CBCFE, CBZE)
+    output logic [3:0]                      csr_s_cmo_cfg_o,           // S mode cmo related flags (CBIE, CBCFE, CBZE)
+    output logic [3:0]                      csr_h_cmo_cfg_o,           // H extension cmo related flags (CBIE, CBCFE, CBZE)
+
     output logic [1:0]                      vcsr_vs_o,
     input logic                             vreg_modified_i,
     input logic                             vxsat_i,
@@ -488,7 +493,7 @@ module csr_bsc#(
                 riscv_pkg::CSR_SIP:                csr_rdata = (def_pkg::RVH) ? mip_q & mideleg_q & ~def_pkg::HS_DELEG_INTERRUPTS : mip_q & mideleg_q;
                 riscv_pkg::CSR_STVEC:              csr_rdata = stvec_q;
                 riscv_pkg::CSR_SCOUNTEREN:         csr_rdata = {{32{1'b0}}, scounteren_q};
-                riscv_pkg::CSR_SENVCFG:            csr_rdata = {63'b0, senvcfg_q[0]}; // only implemented FIOM
+                riscv_pkg::CSR_SENVCFG:            csr_rdata = {56'b0, senvcfg_q[7:4], 3'b0, senvcfg_q[0]}; // only implemented FIOM & CMO
                 riscv_pkg::CSR_SSCRATCH:           csr_rdata = sscratch_q;
                 riscv_pkg::CSR_SEPC:               csr_rdata = sepc_q;
                 riscv_pkg::CSR_SCAUSE:             csr_rdata = scause_q;
@@ -526,7 +531,8 @@ module csr_bsc#(
                     if (def_pkg::RVH)   csr_rdata = 64'h0;
                     else                read_access_exception = 1'b1;
                 riscv_pkg::CSR_HENVCFG:
-                    if (def_pkg::RVH)   csr_rdata = {63'b0, henvcfg_q[0]}; // only FIOM bit implemented
+                    if (def_pkg::RVH)   csr_rdata = {56'b0, henvcfg_q[7:4], 3'b0, henvcfg_q[0]}; // only implemented FIOM & CMO
+
                     else                read_access_exception = 1'b1;
                 riscv_pkg::CSR_HCOUNTEREN:
                     if (def_pkg::RVH)   csr_rdata = {{32{1'b0}}, hcounteren_q};
@@ -608,7 +614,7 @@ module csr_bsc#(
                 riscv_pkg::CSR_MTVAL2:
                     if (def_pkg::RVH) csr_rdata = mtval2_q;
                     else              read_access_exception = 1'b1;
-                riscv_pkg::CSR_MENVCFG:            csr_rdata = {63'b0, menvcfg_q[0]}; // only FIOM bit implemented
+                riscv_pkg::CSR_MENVCFG:            csr_rdata = {56'b0, menvcfg_q[7:4], 3'b0, menvcfg_q[0]}; // only FIOM & CMO bits implemented
                 riscv_pkg::CSR_MVENDORID:          csr_rdata = 64'b0; // not implemented
                 riscv_pkg::CSR_MARCHID:            csr_rdata = 64'b0; // not implemented
                 riscv_pkg::CSR_MIMPID:             csr_rdata = 64'b0; // not implemented
@@ -2494,6 +2500,10 @@ module csr_bsc#(
     // VPU outputs
     assign vcsr_vs_o        = mstatus_q.vs;
 
+    // CMO configuration outputs
+    assign csr_m_cmo_cfg_o  = menvcfg_q[7:4];
+    assign csr_s_cmo_cfg_o  = senvcfg_q[7:4];
+    assign csr_h_cmo_cfg_o  = henvcfg_q[7:4];
 
     // MMU outputs 
     assign satp_ppn_o       = satp_q.ppn[PPN_WIDTH-1:0];
