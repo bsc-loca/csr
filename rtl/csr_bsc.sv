@@ -2558,7 +2558,7 @@ module csr_bsc#(
               en_ld_st_g_translation_q <= 1'b0;
             end
             // machine mode registers
-            mstatus_q              <= 64'b011000000000;
+            mstatus_q              <= 64'b0; // mstatus.VS set to OFF on reset
             // set to boot address + direct mode + 4 byte offset which is the initial trap
             mtvec_rst_load_q       <= 1'b1;
             mtvec_q                <= 64'b0;
