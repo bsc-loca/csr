@@ -2495,10 +2495,10 @@ module csr_bsc#(
     // FPU outputs
 
     assign fcsr_rm_o        = fcsr_q.frm;
-    assign fcsr_fs_o        = mstatus_q.fs;
+    assign fcsr_fs_o        = ((v_mode_q && (vsstatus_q.fs == 2'b00)) || (mstatus_q.fs == 2'b00)) ? 2'b00 : 2'b01;
 
     // VPU outputs
-    assign vcsr_vs_o        = mstatus_q.vs;
+    assign vcsr_vs_o        = ((v_mode_q && (vsstatus_q.vs == 2'b00)) || (mstatus_q.vs == 2'b00)) ? 2'b00 : 2'b01;
 
     // CMO configuration outputs
     assign csr_m_cmo_cfg_o  = menvcfg_q[7:4];
@@ -2558,7 +2558,7 @@ module csr_bsc#(
               htinst_q               <= 64'b0;
               htimedelta_q           <= 64'b0;
               // virtual supervisor mode registers
-              vsstatus_q             <= 64'b011000000000;
+              vsstatus_q             <= 64'b0;
               vstvec_q               <= 64'b0;
               vsscratch_q            <= 64'b0;
               vsepc_q                <= 64'b0;
