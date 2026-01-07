@@ -237,6 +237,7 @@ module csr_bsc#(
     logic [63:0] vsepc_q,     vsepc_d;
     logic [63:0] vscause_q,   vscause_d;
     logic [63:0] vstval_q,    vstval_d;
+    logic [63:0] vstimecmp_q, vstimecmp_d;
 
     logic        mtvec_rst_load_q;// used to determine whether we came out of reset
     logic [63:0] mtvec_q,     mtvec_d;
@@ -267,6 +268,7 @@ module csr_bsc#(
     logic [63:0] sepc_q,      sepc_d;
     logic [63:0] scause_q,    scause_d;
     logic [63:0] stval_q,     stval_d;
+    logic [63:0] stimecmp_q,  stimecmp_d;
     riscv_pkg::sstateen0_t sstateen0_q, sstateen0_d;
     riscv_pkg::sstateen1_t sstateen1_q, sstateen1_d;
     riscv_pkg::sstateen2_t sstateen2_q, sstateen2_d;
@@ -378,6 +380,10 @@ module csr_bsc#(
     
     logic [11:0] perf_addr_dist;
 
+    // sstc supervisor timer interrupt
+    logic stimer_int;
+
+    assign stimer_int = (reg_time_q >= stimecmp_q);
 
     //////////////////////////////////////////////
     // System Instructions Decode
@@ -543,6 +549,7 @@ module csr_bsc#(
                 riscv_pkg::CSR_SEPC:               csr_rdata = sepc_q;
                 riscv_pkg::CSR_SCAUSE:             csr_rdata = scause_q;
                 riscv_pkg::CSR_STVAL:              csr_rdata = stval_q;
+                riscv_pkg::CSR_STIMECMP:           csr_rdata = stimecmp_q;
                 riscv_pkg::CSR_SATP: begin
                     csr_rdata = satp_q;
                     // intercept reads to SATP if in S-Mode and TVM is enabled
@@ -688,6 +695,9 @@ module csr_bsc#(
                     else                read_access_exception = 1'b1;
                 riscv_pkg::CSR_VSTVAL:
                     if (def_pkg::RVH)   csr_rdata = vstval_q;
+                    else                read_access_exception = 1'b1;
+                riscv_pkg::CSR_VSTIMECMP:
+                    if (def_pkg::RVH)   csr_rdata = vstimecmp_q;
                     else                read_access_exception = 1'b1;
                 riscv_pkg::CSR_VSATP:
                 // intercept reads to VSATP if in VS-Mode and VTVM is enabled
@@ -962,6 +972,7 @@ module csr_bsc#(
         automatic logic [63:0] scause_int; // temporal value of scause
         automatic logic [63:0] mtval_int; // temporal value of mtval
         automatic logic [63:0] stval_int; // temporal value of stval
+        automatic logic [63:0] stimecmp_int; //temporal value of stimecmp
         automatic logic [63:0] mepc_int; // temporal value of mepc
         automatic logic [63:0] sepc_int; // temporal value of sepc
 
@@ -1106,6 +1117,7 @@ module csr_bsc#(
         vsscratch_d             = (def_pkg::RVH) ? vsscratch_q  : 0;
         vscause_d               = (def_pkg::RVH) ? vscause_q    : 0;
         vstval_d                = (def_pkg::RVH) ? vstval_q     : 0;
+        vstimecmp_d             = (def_pkg::RVH) ? vstimecmp_q  : 0;
         vsatp_d                 = (def_pkg::RVH) ? vsatp_q      : 0;
         vsepc_d                 = (def_pkg::RVH) ? vsepc_q      : 0;
         en_ld_st_g_translation_d = (def_pkg::RVH) ? en_ld_st_g_translation_q : 0;
@@ -1140,6 +1152,7 @@ module csr_bsc#(
         senvcfg_d               = senvcfg_q;
         sscratch_d              = sscratch_q;
         stval_int               = stval_q;
+        stimecmp_int            = stimecmp_q;
         satp_d                  = satp_q;
         sstateen0_d             = sstateen0_q;
         sstateen1_d             = sstateen1_q;
@@ -1292,6 +1305,7 @@ module csr_bsc#(
                 riscv_pkg::CSR_SEPC:               sepc_int    = {csr_wdata[63:1], 1'b0};
                 riscv_pkg::CSR_SCAUSE:             scause_int  = csr_wdata;
                 riscv_pkg::CSR_STVAL:              stval_int   = csr_wdata;
+                riscv_pkg::CSR_STIMECMP:           stimecmp_int = csr_wdata; // TODO: Check for privileges about writting to stimecmp
                 // supervisor address translation and protection
                 riscv_pkg::CSR_SATP: begin
                     // intercept SATP writes if in S-Mode and TVM is enabled
@@ -1545,6 +1559,9 @@ module csr_bsc#(
                     else                update_access_exception = 1'b1;
                 riscv_pkg::CSR_VSTVAL:
                     if (def_pkg::RVH)   vstval_d = csr_wdata;
+                    else                update_access_exception = 1'b1;
+                riscv_pkg::CSR_VSTIMECMP:
+                    if (def_pkg::RVH)   vstimecmp_d = csr_wdata;
                     else                update_access_exception = 1'b1;
                 riscv_pkg::CSR_VSATP: begin
                   if (def_pkg::RVH) begin
@@ -1882,6 +1899,7 @@ module csr_bsc#(
         scause_d    = scause_int;
         mtval_d     = mtval_int;
         stval_d     = stval_int;
+        stimecmp_d  = stimecmp_int;
         mepc_d      = mepc_int;
         sepc_d      = sepc_int;
 
@@ -3061,6 +3079,7 @@ module csr_bsc#(
               vsepc_q                <= 64'b0;
               vscause_q              <= 64'b0;
               vstval_q               <= 64'b0;
+              vstimecmp_q            <= 64'b0;
               vsatp_q                <= 64'b0;
               en_ld_st_g_translation_q <= 1'b0;
             end
@@ -3094,6 +3113,7 @@ module csr_bsc#(
             senvcfg_q              <= 64'b0;
             sscratch_q             <= 64'b0;
             stval_q                <= 64'b0;
+            stimecmp_q             <= 64'b0;
             satp_q                 <= 64'b0;
             sstateen0_q            <= 32'b0;
             sstateen1_q            <= 32'b0;
@@ -3172,6 +3192,7 @@ module csr_bsc#(
               vsscratch_q            <= vsscratch_d;
               vscause_q              <= vscause_d;
               vstval_q               <= vstval_d;
+              vstimecmp_q            <= vstimecmp_d;
               vsatp_q                <= vsatp_d;
               vsepc_q                <= vsepc_d;
               en_ld_st_g_translation_q <= en_ld_st_g_translation_d;
@@ -3205,6 +3226,7 @@ module csr_bsc#(
             senvcfg_q              <= senvcfg_d;
             sscratch_q             <= sscratch_d;
             stval_q                <= stval_d;
+            stimecmp_q             <= stimecmp_d;
             satp_q                 <= satp_d;
             sstateen0_q            <= sstateen0_d;
             sstateen1_q            <= sstateen1_d;
