@@ -385,6 +385,10 @@ module csr_bsc#(
 
     assign stimer_int = (reg_time_q >= stimecmp_q);
 
+    logic vstimer_int;
+
+    assign vstimer_int = ((reg_time_q + htimedelta_q) >= stimecmp_q);
+
     //////////////////////////////////////////////
     // System Instructions Decode
     //////////////////////////////////////////////
