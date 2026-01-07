@@ -549,7 +549,13 @@ module csr_bsc#(
                 riscv_pkg::CSR_SEPC:               csr_rdata = sepc_q;
                 riscv_pkg::CSR_SCAUSE:             csr_rdata = scause_q;
                 riscv_pkg::CSR_STVAL:              csr_rdata = stval_q;
-                riscv_pkg::CSR_STIMECMP:           csr_rdata = stimecmp_q;
+                riscv_pkg::CSR_STIMECMP: begin
+                    if ((menvcfg_q[63] == 1'b0) && (priv_lvl_o != riscv_pkg::PRIV_LVL_M)) begin
+                        read_access_exception = 1'b1;
+                    end else begin
+                        csr_rdata = stimecmp_q;
+                    end
+                end
                 riscv_pkg::CSR_SATP: begin
                     csr_rdata = satp_q;
                     // intercept reads to SATP if in S-Mode and TVM is enabled
@@ -696,9 +702,14 @@ module csr_bsc#(
                 riscv_pkg::CSR_VSTVAL:
                     if (def_pkg::RVH)   csr_rdata = vstval_q;
                     else                read_access_exception = 1'b1;
-                riscv_pkg::CSR_VSTIMECMP:
-                    if (def_pkg::RVH)   csr_rdata = vstimecmp_q;
-                    else                read_access_exception = 1'b1;
+                riscv_pkg::CSR_VSTIMECMP: begin
+                    if (def_pkg::RVH) begin
+                        if (((menvcfg_d[63] == 1'b0 || henvcfg_q[63] == 1'b0)) && (priv_lvl_o != riscv_pkg::PRIV_LVL_M)) csr_rdata = vstimecmp_q;
+                        else virtual_read_access_exception = 1'b1;
+                    end else begin
+                        read_access_exception = 1'b1;
+                    end
+                end
                 riscv_pkg::CSR_VSATP:
                 // intercept reads to VSATP if in VS-Mode and VTVM is enabled
                 if (def_pkg::RVH) begin
@@ -1305,7 +1316,13 @@ module csr_bsc#(
                 riscv_pkg::CSR_SEPC:               sepc_int    = {csr_wdata[63:1], 1'b0};
                 riscv_pkg::CSR_SCAUSE:             scause_int  = csr_wdata;
                 riscv_pkg::CSR_STVAL:              stval_int   = csr_wdata;
-                riscv_pkg::CSR_STIMECMP:           stimecmp_int = csr_wdata; // TODO: Check for privileges about writting to stimecmp
+                riscv_pkg::CSR_STIMECMP: begin
+                    if ((menvcfg_q[63] == 1'b0) && (priv_lvl_o != riscv_pkg::PRIV_LVL_M)) begin
+                        read_access_exception = 1'b1;
+                    end else begin
+                        stimecmp_int = csr_wdata;
+                    end
+                end
                 // supervisor address translation and protection
                 riscv_pkg::CSR_SATP: begin
                     // intercept SATP writes if in S-Mode and TVM is enabled
@@ -1561,8 +1578,15 @@ module csr_bsc#(
                     if (def_pkg::RVH)   vstval_d = csr_wdata;
                     else                update_access_exception = 1'b1;
                 riscv_pkg::CSR_VSTIMECMP:
-                    if (def_pkg::RVH)   vstimecmp_d = csr_wdata;
-                    else                update_access_exception = 1'b1;
+                    if (def_pkg::RVH) begin
+                        if (((menvcfg_d[63] == 1'b0 || henvcfg_q[63] == 1'b0)) && (priv_lvl_o != riscv_pkg::PRIV_LVL_M)) begin
+                            vstimecmp_d = csr_wdata;
+                        end else begin
+                            virtual_read_access_exception = 1'b1;
+                        end
+                    end else begin
+                        update_access_exception = 1'b1;
+                    end
                 riscv_pkg::CSR_VSATP: begin
                   if (def_pkg::RVH) begin
                     if ((priv_lvl_o == riscv_pkg::PRIV_LVL_S) && hstatus_q.vtvm && v_mode_q) begin
