@@ -623,7 +623,7 @@ module csr_bsc#(
                     if (def_pkg::RVH)   csr_rdata = 64'h0;
                     else                read_access_exception = 1'b1;
                 riscv_pkg::CSR_HENVCFG:
-                    if (def_pkg::RVH)   csr_rdata = {1'b0, henvcfg_q[62], 28'b0, henvcfg_q[33:32], 24'b0, henvcfg_q[7:4], 3'b0, henvcfg_q[0]}; // only implemented FIOM & CMO & PMM
+                    if (def_pkg::RVH)   csr_rdata = {henvcfg_q[63:62], 28'b0, henvcfg_q[33:32], 24'b0, henvcfg_q[7:4], 3'b0, henvcfg_q[0]}; // only implemented sstc, FIOM & CMO & PMM
 
                     else                read_access_exception = 1'b1;
                 riscv_pkg::CSR_HCOUNTEREN:
@@ -731,7 +731,7 @@ module csr_bsc#(
                 riscv_pkg::CSR_MTVAL2:
                     if (def_pkg::RVH) csr_rdata = mtval2_q;
                     else              read_access_exception = 1'b1;
-                riscv_pkg::CSR_MENVCFG:            csr_rdata = {1'b0, menvcfg_q[62], 54'b0, menvcfg_q[7:4], 3'b0, menvcfg_q[0]}; // only FIOM, CMO & PBMTE bits implemented
+                riscv_pkg::CSR_MENVCFG:            csr_rdata = {menvcfg_q[63:62], 54'b0, menvcfg_q[7:4], 3'b0, menvcfg_q[0]}; // only sstc, FIOM, CMO & PBMTE bits implemented
                 riscv_pkg::CSR_MVENDORID:          csr_rdata = 64'b0; // not implemented
                 riscv_pkg::CSR_MARCHID:            csr_rdata = 64'd51; // RISC-V Manual
                 riscv_pkg::CSR_MIMPID:             csr_rdata = 64'h300; //v3.0.0
