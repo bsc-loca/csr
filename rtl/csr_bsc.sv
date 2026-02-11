@@ -104,6 +104,9 @@ module csr_bsc#(
     output logic [3:0]                      csr_s_cmo_cfg_o,           // S mode cmo related flags (CBIE, CBCFE, CBZE)
     output logic [3:0]                      csr_h_cmo_cfg_o,           // H extension cmo related flags (CBIE, CBCFE, CBZE)
 
+    output logic [1:0]                      csr_s_pmm_cfg_o,
+    output logic [1:0]                      csr_h_pmm_cfg_o,
+
     output logic [1:0]                      vcsr_vs_o,
     input logic                             vreg_modified_i,
     input logic                             vxsat_i,
@@ -515,7 +518,7 @@ module csr_bsc#(
                 riscv_pkg::CSR_SIP:                csr_rdata = (def_pkg::RVH) ? mip_q & mideleg_q & ~def_pkg::HS_DELEG_INTERRUPTS : mip_q & mideleg_q;
                 riscv_pkg::CSR_STVEC:              csr_rdata = stvec_q;
                 riscv_pkg::CSR_SCOUNTEREN:         csr_rdata = {{32{1'b0}}, scounteren_q};
-                riscv_pkg::CSR_SENVCFG:            csr_rdata = {56'b0, senvcfg_q[7:4], 3'b0, senvcfg_q[0]}; // only implemented FIOM & CMO
+                riscv_pkg::CSR_SENVCFG:            csr_rdata = {30'b0, senvcfg_q[33:32], 24'b0, senvcfg_q[7:4], 3'b0, senvcfg_q[0]}; // only implemented FIOM & CMO & PMM
                 riscv_pkg::CSR_SSCRATCH:           csr_rdata = sscratch_q;
                 riscv_pkg::CSR_SEPC:               csr_rdata = sepc_q;
                 riscv_pkg::CSR_SCAUSE:             csr_rdata = scause_q;
@@ -593,7 +596,7 @@ module csr_bsc#(
                     if (def_pkg::RVH)   csr_rdata = 64'h0;
                     else                read_access_exception = 1'b1;
                 riscv_pkg::CSR_HENVCFG:
-                    if (def_pkg::RVH)   csr_rdata = {56'b0, henvcfg_q[7:4], 3'b0, henvcfg_q[0]}; // only implemented FIOM & CMO
+                    if (def_pkg::RVH)   csr_rdata = {30'b0, senvcfg_q[33:32], 24'b0, senvcfg_q[7:4], 3'b0, senvcfg_q[0]};
 
                     else                read_access_exception = 1'b1;
                 riscv_pkg::CSR_HCOUNTEREN:
@@ -2919,6 +2922,9 @@ module csr_bsc#(
     assign csr_m_cmo_cfg_o  = menvcfg_q[7:4];
     assign csr_s_cmo_cfg_o  = senvcfg_q[7:4];
     assign csr_h_cmo_cfg_o  = henvcfg_q[7:4];
+
+    assign csr_s_pmm_cfg_o  = senvcfg_q[33:32];
+    assign csr_h_pmm_cfg_o  = henvcfg_q[33:32];
 
     // MMU outputs 
     assign satp_ppn_o       = satp_q.ppn[PPN_WIDTH-1:0];
