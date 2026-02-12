@@ -387,7 +387,7 @@ module csr_bsc#(
 
     logic vstimer_int;
 
-    assign vstimer_int = ((reg_time_q + htimedelta_q) >= stimecmp_q);
+    assign vstimer_int = ((reg_time_q + htimedelta_q) >= vstimecmp_q);
 
     //////////////////////////////////////////////
     // System Instructions Decode
@@ -553,8 +553,10 @@ module csr_bsc#(
                 riscv_pkg::CSR_SEPC:               csr_rdata = sepc_q;
                 riscv_pkg::CSR_SCAUSE:             csr_rdata = scause_q;
                 riscv_pkg::CSR_STVAL:              csr_rdata = stval_q;
+                // menvcfg[63] disables read acces to stimecmp if not running in machine mode.
                 riscv_pkg::CSR_STIMECMP: begin
-                    if ((menvcfg_q[63] == 1'b0) && (priv_lvl_o != riscv_pkg::PRIV_LVL_M)) begin
+                    if (((menvcfg_q[63] == 1'b0) && (priv_lvl_o != riscv_pkg::PRIV_LVL_M)) ||
+                         (mcounteren_q[1] == 1'b0 && priv_lvl_o != riscv_pkg::PRIV_LVL_M)) begin
                         read_access_exception = 1'b1;
                     end else begin
                         csr_rdata = stimecmp_q;
@@ -620,8 +622,16 @@ module csr_bsc#(
                 riscv_pkg::CSR_HVIP:
                     if (def_pkg::RVH)   csr_rdata = mip_q & def_pkg::VS_DELEG_INTERRUPTS;
                     else                read_access_exception = 1'b1;
+                // If menvcfg or henvcfg forbids it que revert to previous
+                // behaviours, ie, returning mip.
                 riscv_pkg::CSR_HIP:
-                    if (def_pkg::RVH)   csr_rdata = mip_q & def_pkg::HS_DELEG_INTERRUPTS;
+                    if (def_pkg::RVH)   begin
+                        if (menvcfg_q[63] == 1'b0 || henvcfg_q[63] == 1'b0) begin
+                            csr_rdata = mip_q & def_pkg::HS_DELEG_INTERRUPTS;
+                        end else begin
+                            csr_rdata = ({mip_q[63:7], vstimer_int, mip_q[5:0]}) & def_pkg::HS_DELEG_INTERRUPTS;
+                        end
+                    end
                     else                read_access_exception = 1'b1;
                 riscv_pkg::CSR_HIE:
                     if (def_pkg::RVH)   csr_rdata = mie_q & def_pkg::HS_DELEG_INTERRUPTS;
@@ -708,8 +718,11 @@ module csr_bsc#(
                     else                read_access_exception = 1'b1;
                 riscv_pkg::CSR_VSTIMECMP: begin
                     if (def_pkg::RVH) begin
-                        if (((menvcfg_d[63] == 1'b0 || henvcfg_q[63] == 1'b0)) && (priv_lvl_o != riscv_pkg::PRIV_LVL_M)) csr_rdata = vstimecmp_q;
-                        else virtual_read_access_exception = 1'b1;
+                        if (((menvcfg_d[63] == 1'b0 || henvcfg_q[63] == 1'b0)) && (priv_lvl_o != riscv_pkg::PRIV_LVL_M) ||
+                             (mcounteren_q[1] == 1'b0 && priv_lvl_o != riscv_pkg::PRIV_LVL_M) ||
+                             (hcounteren_q[1] == 1'b0 && priv_lvl_o != riscv_pkg::PRIV_LVL_M)) begin
+                                virtual_read_access_exception = 1'b1;
+                        end else csr_rdata = vstimecmp_q;
                     end else begin
                         read_access_exception = 1'b1;
                     end
@@ -1113,7 +1126,7 @@ module csr_bsc#(
         // External Interrupts
         // ---------------------
         // the IRQ_M_EXT = irq_i || rocc_interrupt_i, IRQ_M_SOFT = m_soft_irq_i and IRQ_M_TIMER = time_irq_i
-        mip_d = {mip_q[63:14], perf_count_ovf_int_req_i || mip_q[13], mip_q[12], irq_q[0], mip_q[10:8], time_irq_i, mip_q[6:4], m_soft_irq_i, mip_q[2:0]};
+        mip_d = {mip_q[63:14], perf_count_ovf_int_req_i || mip_q[13], mip_q[12], irq_q[0], mip_q[10:8], time_irq_i, mip_q[6], stimer_int, mip_q[4], m_soft_irq_i, mip_q[2:0]};
 
         hedeleg_d               = (def_pkg::RVH) ? hedeleg_q    : 0;
         hideleg_d               = (def_pkg::RVH) ? hideleg_q    : 0;
@@ -1321,8 +1334,10 @@ module csr_bsc#(
                 riscv_pkg::CSR_SCAUSE:             scause_int  = csr_wdata;
                 riscv_pkg::CSR_STVAL:              stval_int   = csr_wdata;
                 riscv_pkg::CSR_STIMECMP: begin
-                    if ((menvcfg_q[63] == 1'b0) && (priv_lvl_o != riscv_pkg::PRIV_LVL_M)) begin
-                        read_access_exception = 1'b1;
+                    // If menvfq == 0 and not machine mode, writing to stimecmp is disabled.
+                    if (((menvcfg_q[63] == 1'b0) && (priv_lvl_o != riscv_pkg::PRIV_LVL_M)) || 
+                         (mcounteren_q[1] == 1'b0 && priv_lvl_o != riscv_pkg::PRIV_LVL_M)) begin
+                        update_access_exception = 1'b1;
                     end else begin
                         stimecmp_int = csr_wdata;
                     end
@@ -1583,10 +1598,12 @@ module csr_bsc#(
                     else                update_access_exception = 1'b1;
                 riscv_pkg::CSR_VSTIMECMP:
                     if (def_pkg::RVH) begin
-                        if (((menvcfg_d[63] == 1'b0 || henvcfg_q[63] == 1'b0)) && (priv_lvl_o != riscv_pkg::PRIV_LVL_M)) begin
-                            vstimecmp_d = csr_wdata;
+                        if (((menvcfg_d[63] == 1'b0 || henvcfg_q[63] == 1'b0)) && (priv_lvl_o != riscv_pkg::PRIV_LVL_M) ||
+                             (mcounteren_q[1] == 1'b0 && priv_lvl_o != riscv_pkg::PRIV_LVL_M) ||
+                             (hcounteren_q[1] == 1'b0 && priv_lvl_o != riscv_pkg::PRIV_LVL_M)) begin
+                            update_access_exception = 1'b1;
                         end else begin
-                            virtual_read_access_exception = 1'b1;
+                            vstimecmp_d = csr_wdata;
                         end
                     end else begin
                         update_access_exception = 1'b1;
@@ -1690,15 +1707,19 @@ module csr_bsc#(
                     if (def_pkg::RVH) mtinst_d = {{32{1'b0}}, csr_wdata[31:0]};
                     else update_access_exception = 1'b1;
                 riscv_pkg::CSR_MTVAL2,
+                // STIP on MIP can only be written if (menvcfg[63] == 0) (sstc is dsabled)
                 riscv_pkg::CSR_MIP: begin
                   if (def_pkg::RVH) begin
                     mask = riscv_pkg::MIP_SSIP
-                         | riscv_pkg::MIP_STIP
+                         | ((menvcfg_q[63] == 0) ? riscv_pkg::MIP_STIP : '0)
                          | riscv_pkg::MIP_SEIP
                          | riscv_pkg::MIP_LCOFIP
                          | riscv_pkg::MIP_VSSIP;
                   end else begin
-                    mask = riscv_pkg::MIP_SSIP | riscv_pkg::MIP_STIP | riscv_pkg::MIP_SEIP | riscv_pkg::MIP_LCOFIP;
+                    mask = riscv_pkg::MIP_SSIP
+                        | ((menvcfg_q[63] == 0) ? riscv_pkg::MIP_STIP : '0)
+                        | riscv_pkg::MIP_SEIP
+                        | riscv_pkg::MIP_LCOFIP;
                   end
                   mip_d = (mip_q & ~mask) | (csr_wdata & mask);
                 end
