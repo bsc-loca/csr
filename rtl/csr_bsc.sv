@@ -148,6 +148,11 @@ module csr_bsc#(
     input  logic                            perf_count_ovf_int_req_i,
     input  logic [31:3]                     perf_mhpm_ovf_bits_i,
 
+`ifndef HPIC_DISABLE
+    // HPIC Prefetcher CSR
+    output logic [15:0]                     hpic_degree_o,
+`endif
+
     // Debug extension
     input logic                             debug_halt_req_i,
     input logic                             debug_halt_ack_i,
@@ -338,6 +343,9 @@ module csr_bsc#(
         logic [63:0] dyn_fpga_mem_latency_d, dyn_fpga_mem_latency_q;
     `endif // CONF_SARGANTANA_ENABLE_DYN_FPGA_MEM_LATENCY
 
+    `ifndef HPIC_DISABLE
+        logic[15:0] hpic_degree_d, hpic_degree_q;  
+    `endif
     //interruption wires
     logic [63:0] interrupt_cause_q, interrupt_cause_d, interrupt_cause;
     logic interrupt_d, interrupt_q;
@@ -878,6 +886,11 @@ module csr_bsc#(
                     csr_rdata = dyn_fpga_mem_latency_q;
                 `endif
 
+                `ifndef HPIC_DISABLE
+                riscv_pkg::CSR_IPREF: // Adding this line just to be able to check what is the selected degree in the CSRs
+                    csr_rdata = {{(64-16){1'b0}},hpic_degree_q};
+                `endif
+
                 riscv_pkg::CSR_PMPCFG_0:;
                 riscv_pkg::CSR_PMPCFG_1:;
                 riscv_pkg::CSR_PMPCFG_2:;
@@ -1124,9 +1137,16 @@ module csr_bsc#(
         `ifdef CONF_SARGANTANA_ENABLE_DYN_FPGA_MEM_LATENCY
             dyn_fpga_mem_latency_d = dyn_fpga_mem_latency_q;
         `endif
+        `ifndef HPIC_DISABLE
+            hpic_degree_d = hpic_degree_q;
+        `endif
 
         mask                    = 64'h0;
         satp_temp='0;
+
+        `ifndef HPIC_DISABLE
+        hpic_degree_o = '0;
+        `endif
 
         // check for correct access rights and that we are writing
         if (csr_we) begin
@@ -1796,6 +1816,11 @@ module csr_bsc#(
                 `ifdef CONF_SARGANTANA_ENABLE_DYN_FPGA_MEM_LATENCY
                 riscv_pkg::CSR_DYN_MEM_LATENCY:
                     dyn_fpga_mem_latency_d = csr_wdata;
+                `endif
+
+                `ifndef HPIC_DISABLE
+                riscv_pkg::CSR_IPREF:
+                    hpic_degree_d = csr_wdata[15:0];
                 `endif
 
                 riscv_pkg::CSR_PMPCFG_0:;
@@ -2805,6 +2830,10 @@ module csr_bsc#(
     assign dyn_fpga_mem_latency_o = dyn_fpga_mem_latency_q;
 `endif // CONF_SARGANTANA_ENABLE_DYN_FPGA_MEM_LATENCY
 
+`ifndef HPIC_DISABLE
+    assign hpic_degree_p = hpic_degree_q;
+`endif
+
     // output assignments dependent on privilege mode
     always_comb begin : priv_output
         // vectorized trap addres
@@ -3114,6 +3143,10 @@ module csr_bsc#(
             `ifdef CONF_SARGANTANA_ENABLE_DYN_FPGA_MEM_LATENCY
                 dyn_fpga_mem_latency_q <= dyn_fpga_mem_latency_d;
             `endif // CONF_SARGANTANA_ENABLE_DYN_FPGA_MEM_LATENCY
+
+            `ifndef HPIC_DISABLE
+                hpic_degree_q <= hpic_degree_d;
+            `endif
 
             reg_time_q <= reg_time_d; 
 
