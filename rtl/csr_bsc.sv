@@ -1144,9 +1144,9 @@ module csr_bsc#(
         mask                    = 64'h0;
         satp_temp='0;
 
-        `ifndef HPIC_DISABLE
-        hpic_degree_o = '0;
-        `endif
+        // `ifndef HPIC_DISABLE
+        // hpic_degree_d = '0;
+        // `endif
 
         // check for correct access rights and that we are writing
         if (csr_we) begin
@@ -2831,7 +2831,7 @@ module csr_bsc#(
 `endif // CONF_SARGANTANA_ENABLE_DYN_FPGA_MEM_LATENCY
 
 `ifndef HPIC_DISABLE
-    assign hpic_degree_p = hpic_degree_q;
+    assign hpic_degree_o = hpic_degree_q;
 `endif
 
     // output assignments dependent on privilege mode
@@ -3040,6 +3040,10 @@ module csr_bsc#(
             `ifdef CONF_SARGANTANA_ENABLE_DYN_FPGA_MEM_LATENCY
                 dyn_fpga_mem_latency_q <= '0;
             `endif // CONF_SARGANTANA_ENABLE_DYN_FPGA_MEM_LATENCY
+
+            `ifndef HPIC_DISABLE
+                hpic_degree_q <= '0;
+            `endif
 
             reg_time_q <= 64'b0;
 
