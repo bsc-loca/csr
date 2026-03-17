@@ -3042,7 +3042,7 @@ module csr_bsc#(
             `endif // CONF_SARGANTANA_ENABLE_DYN_FPGA_MEM_LATENCY
 
             `ifndef HPIC_DISABLE
-                hpic_degree_q <= 16'd0;
+                hpic_degree_q <= 16'd4;
             `endif
 
             reg_time_q <= 64'b0;
