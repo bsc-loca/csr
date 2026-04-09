@@ -106,6 +106,7 @@ module csr_bsc#(
 
     output logic [1:0]                      csr_s_pmm_cfg_o,
     output logic [1:0]                      csr_h_pmm_cfg_o,
+    output logic [1:0]                      csr_hstatus_hupmm_o,
 
     output logic [1:0]                      vcsr_vs_o,
     input logic                             vreg_modified_i,
@@ -1262,7 +1263,11 @@ module csr_bsc#(
 
                 riscv_pkg::CSR_SCOUNTEREN:         scounteren_d =  {csr_wdata[31:0]};
                 riscv_pkg::CSR_STVEC:              stvec_d     = {csr_wdata[63:2], 1'b0, csr_wdata[0]};
-                riscv_pkg::CSR_SENVCFG:            senvcfg_d   = csr_wdata;
+                riscv_pkg::CSR_SENVCFG: begin
+                    senvcfg_d   = csr_wdata;
+                    if (def_pkg::RVH) begin
+                        hstatus_d.hupmm = csr_wdata[33:32];
+                end
                 riscv_pkg::CSR_SSCRATCH:           sscratch_d  = csr_wdata;
                 riscv_pkg::CSR_SEPC:               sepc_int    = {csr_wdata[63:1], 1'b0};
                 riscv_pkg::CSR_SCAUSE:             scause_int  = csr_wdata;
@@ -2925,6 +2930,7 @@ module csr_bsc#(
 
     assign csr_s_pmm_cfg_o  = senvcfg_q[33:32];
     assign csr_h_pmm_cfg_o  = henvcfg_q[33:32];
+    assign csr_hstatus_hupmm_o = def_pkg::RVH ? hstatus_q.hupmm : 2'b0;
 
     // MMU outputs 
     assign satp_ppn_o       = satp_q.ppn[PPN_WIDTH-1:0];
