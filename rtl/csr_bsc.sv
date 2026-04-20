@@ -214,6 +214,10 @@ module csr_bsc#(
     logic [63:0] htval_q,     htval_d;
     logic [63:0] htinst_q,    htinst_d;
     logic [63:0] htimedelta_q,htimedelta_d;
+    riscv_pkg::hstateen0_t hstateen0_q, hstateen0_d;
+    riscv_pkg::hstateen1_t hstateen1_q, hstateen1_d;
+    riscv_pkg::hstateen2_t hstateen2_q, hstateen2_d;
+    riscv_pkg::hstateen3_t hstateen3_q, hstateen3_d;
     
     logic [63:0] vstvec_q,    vstvec_d;
     logic [63:0] vsscratch_q, vsscratch_d;
@@ -238,6 +242,10 @@ module csr_bsc#(
     logic [63:0] mtinst_q,    mtinst_d;
     logic [63:0] mtval2_q,    mtval2_d;
     logic [63:0] menvcfg_q,   menvcfg_d;
+    riscv_pkg::mstateen0_t mstateen0_q, mstateen0_d;
+    riscv_pkg::mstateen1_t mstateen1_q, mstateen1_d;
+    riscv_pkg::mstateen2_t mstateen2_q, mstateen2_d;
+    riscv_pkg::mstateen3_t mstateen3_q, mstateen3_d;
 
     logic [63:0] stvec_q,     stvec_d;
     logic [31:0] scounteren_q,scounteren_d;
@@ -246,6 +254,10 @@ module csr_bsc#(
     logic [63:0] sepc_q,      sepc_d;
     logic [63:0] scause_q,    scause_d;
     logic [63:0] stval_q,     stval_d;
+    riscv_pkg::sstateen0_t sstateen0_q, sstateen0_d;
+    riscv_pkg::sstateen1_t sstateen1_q, sstateen1_d;
+    riscv_pkg::sstateen2_t sstateen2_q, sstateen2_d;
+    riscv_pkg::sstateen3_t sstateen3_q, sstateen3_d;
 
     // Vector extension registers
     logic [63:0] vl_q,        vl_d;
@@ -507,6 +519,46 @@ module csr_bsc#(
                         read_access_exception = 1'b1;
                     end
                 end
+                riscv_pkg::CSR_SSTATEEN0: begin
+                    // For every bit in an mstateen CSR that is zero (whether read-only zero or set to zero),
+                    // the same bit appears as read-only zero in the matching hstateen and sstateen CSRs
+                    // For every bit in an hstateen CSR that is zero (whether read-only zero or set to zero),
+                    // the same bit appears as read-only zero in sstateen when accessed in VS-mode.
+                    csr_rdata = {{32{1'b0}}, sstateen0_q} &
+                                (mstateen0_q & 
+                                ((def_pkg::RVH) && (v_mode_q && (priv_lvl_q == riscv_pkg::PRIV_LVL_S))) ?
+                                    hstateen0_q : 64'hFFFFFFFF);
+                end
+                riscv_pkg::CSR_SSTATEEN1: begin
+                    // For every bit in an mstateen CSR that is zero (whether read-only zero or set to zero),
+                    // the same bit appears as read-only zero in the matching hstateen and sstateen CSRs
+                    // For every bit in an hstateen CSR that is zero (whether read-only zero or set to zero),
+                    // the same bit appears as read-only zero in sstateen when accessed in VS-mode.
+                    csr_rdata = {{32{1'b0}}, sstateen1_q} &
+                                (mstateen0_q & 
+                                ((def_pkg::RVH) && (v_mode_q && (priv_lvl_q == riscv_pkg::PRIV_LVL_S))) ?
+                                    hstateen0_q : 64'hFFFFFFFF);
+                end
+                riscv_pkg::CSR_SSTATEEN2: begin
+                    // For every bit in an mstateen CSR that is zero (whether read-only zero or set to zero),
+                    // the same bit appears as read-only zero in the matching hstateen and sstateen CSRs
+                    // For every bit in an hstateen CSR that is zero (whether read-only zero or set to zero),
+                    // the same bit appears as read-only zero in sstateen when accessed in VS-mode.
+                    csr_rdata = {{32{1'b0}}, sstateen2_q} &
+                                (mstateen0_q & 
+                                ((def_pkg::RVH) && (v_mode_q && (priv_lvl_q == riscv_pkg::PRIV_LVL_S))) ?
+                                    hstateen0_q : 64'hFFFFFFFF);
+                end
+                riscv_pkg::CSR_SSTATEEN3: begin
+                    // For every bit in an mstateen CSR that is zero (whether read-only zero or set to zero),
+                    // the same bit appears as read-only zero in the matching hstateen and sstateen CSRs
+                    // For every bit in an hstateen CSR that is zero (whether read-only zero or set to zero),
+                    // the same bit appears as read-only zero in sstateen when accessed in VS-mode.
+                    csr_rdata = {{32{1'b0}}, sstateen3_q} &
+                                (mstateen0_q & 
+                                ((def_pkg::RVH) && (v_mode_q && (priv_lvl_q == riscv_pkg::PRIV_LVL_S))) ?
+                                    hstateen0_q : 64'hFFFFFFFF);
+                end
                 // hypervisor mode registers
                 riscv_pkg::CSR_HSTATUS:
                     if (def_pkg::RVH)   csr_rdata = hstatus_q;
@@ -559,6 +611,26 @@ module csr_bsc#(
                 end
                 riscv_pkg::CSR_HTIMEDELTA:
                     if (def_pkg::RVH)   csr_rdata = htimedelta_q;
+                    else                read_access_exception = 1'b1;
+                riscv_pkg::CSR_HSTATEEN0:
+                    // For every bit in an mstateen CSR that is zero (whether read-only zero or set to zero),
+                    // the same bit appears as read-only zero in the matching hstateen and sstateen CSRs
+                    if (def_pkg::RVH)   csr_rdata = hstateen0_q & mstateen0_q;
+                    else                read_access_exception = 1'b1;
+                riscv_pkg::CSR_HSTATEEN1:
+                    // For every bit in an mstateen CSR that is zero (whether read-only zero or set to zero),
+                    // the same bit appears as read-only zero in the matching hstateen and sstateen CSRs
+                    if (def_pkg::RVH)   csr_rdata = hstateen1_q & mstateen1_q;
+                    else                read_access_exception = 1'b1;
+                riscv_pkg::CSR_HSTATEEN2:
+                    // For every bit in an mstateen CSR that is zero (whether read-only zero or set to zero),
+                    // the same bit appears as read-only zero in the matching hstateen and sstateen CSRs
+                    if (def_pkg::RVH)   csr_rdata = hstateen2_q & mstateen2_q;
+                    else                read_access_exception = 1'b1;
+                riscv_pkg::CSR_HSTATEEN3:
+                    // For every bit in an mstateen CSR that is zero (whether read-only zero or set to zero),
+                    // the same bit appears as read-only zero in the matching hstateen and sstateen CSRs
+                    if (def_pkg::RVH)   csr_rdata = hstateen3_q & mstateen3_q;
                     else                read_access_exception = 1'b1;
 
                 // virtual supervisor mode registers
@@ -627,6 +699,10 @@ module csr_bsc#(
                 `ifdef PITON_CINCORANCH
                 riscv_pkg::CSR_MBOOT_MAIN_ID:      csr_rdata = {62'b0, boot_main_id_i};
                 `endif  // Custom for CincoRanch
+                riscv_pkg::CSR_MSTATEEN0:          csr_rdata = mstateen0_q;
+                riscv_pkg::CSR_MSTATEEN1:          csr_rdata = mstateen1_q;
+                riscv_pkg::CSR_MSTATEEN2:          csr_rdata = mstateen2_q;
+                riscv_pkg::CSR_MSTATEEN3:          csr_rdata = mstateen3_q;
                 // Counters and Timers
                 riscv_pkg::CSR_MCYCLE:             csr_rdata = cycle_q;
                 riscv_pkg::CSR_MINSTRET:           csr_rdata = instret_q;
@@ -985,6 +1061,10 @@ module csr_bsc#(
         htval_d                 = (def_pkg::RVH) ? htval_q      : 0;
         hgatp_d                 = (def_pkg::RVH) ? hgatp_q      : 0;
         htimedelta_d            = (def_pkg::RVH) ? htimedelta_q : 0;
+        hstateen0_d             = (def_pkg::RVH) ? hstateen0_q  : 0;
+        hstateen1_d             = (def_pkg::RVH) ? hstateen1_q  : 0;
+        hstateen2_d             = (def_pkg::RVH) ? hstateen2_q  : 0;
+        hstateen3_d             = (def_pkg::RVH) ? hstateen3_q  : 0;
 
         vstvec_d                = (def_pkg::RVH) ? vstvec_q     : 0;
         vsscratch_d             = (def_pkg::RVH) ? vsscratch_q  : 0;
@@ -1012,6 +1092,11 @@ module csr_bsc#(
 
         menvcfg_d               = menvcfg_q;
 
+        mstateen0_d             = mstateen0_q;
+        mstateen1_d             = mstateen1_q;
+        mstateen2_d             = mstateen2_q;
+        mstateen3_d             = mstateen3_q;
+
         sepc_int                = sepc_q;
         scause_int              = scause_q;
         stvec_d                 = stvec_q;
@@ -1020,6 +1105,10 @@ module csr_bsc#(
         sscratch_d              = sscratch_q;
         stval_int               = stval_q;
         satp_d                  = satp_q;
+        sstateen0_d             = sstateen0_q;
+        sstateen1_d             = sstateen1_q;
+        sstateen2_d             = sstateen2_q;
+        sstateen3_d             = sstateen3_q;
 
         en_ld_st_translation_d  = en_ld_st_translation_q;
 
@@ -1172,6 +1261,50 @@ module csr_bsc#(
                     // changing the mode can have side-effects on address translation (e.g.: other instructions), re-fetch
                     // the next instruction by executing a flush
                 end
+                riscv_pkg::CSR_SSTATEEN0: begin
+                    // For every bit in an mstateen CSR that is zero (whether read-only zero or set to zero),
+                    // the same bit appears as read-only zero in the matching hstateen and sstateen CSRs
+                    // For every bit in an hstateen CSR that is zero (whether read-only zero or set to zero),
+                    // the same bit appears as read-only zero in sstateen when accessed in VS-mode.
+                    mask =  64'h00000000 & // Reserved for future use, all bits are read-only zero
+                            (mstateen0_q & 
+                            ((def_pkg::RVH) && (v_mode_q && (priv_lvl_q == riscv_pkg::PRIV_LVL_S))) ?
+                                hstateen0_q : 64'hFFFFFFFF);
+                    sstateen0_d = (sstateen0_q & ~mask[31:0]) | (csr_wdata[31:0] & mask[31:0]);
+                end
+                riscv_pkg::CSR_SSTATEEN1: begin
+                    // For every bit in an mstateen CSR that is zero (whether read-only zero or set to zero),
+                    // the same bit appears as read-only zero in the matching hstateen and sstateen CSRs
+                    // For every bit in an hstateen CSR that is zero (whether read-only zero or set to zero),
+                    // the same bit appears as read-only zero in sstateen when accessed in VS-mode.
+                    mask =  64'h00000000 & // Reserved for future use, all bits are read-only zero
+                            (mstateen1_q & 
+                            ((def_pkg::RVH) && (v_mode_q && (priv_lvl_q == riscv_pkg::PRIV_LVL_S))) ?
+                                hstateen1_q : 64'hFFFFFFFF);
+                    sstateen1_d = (sstateen1_q & ~mask[31:0]) | (csr_wdata[31:0] & mask[31:0]);
+                end
+                riscv_pkg::CSR_SSTATEEN2: begin
+                    // For every bit in an mstateen CSR that is zero (whether read-only zero or set to zero),
+                    // the same bit appears as read-only zero in the matching hstateen and sstateen CSRs
+                    // For every bit in an hstateen CSR that is zero (whether read-only zero or set to zero),
+                    // the same bit appears as read-only zero in sstateen when accessed in VS-mode.
+                    mask =  64'h00000000 & // Reserved for future use, all bits are read-only zero
+                            (mstateen2_q & 
+                            ((def_pkg::RVH) && (v_mode_q && (priv_lvl_q == riscv_pkg::PRIV_LVL_S))) ?
+                                hstateen2_q : 64'hFFFFFFFF);
+                    sstateen2_d = (sstateen2_q & ~mask[31:0]) | (csr_wdata[31:0] & mask[31:0]);
+                end
+                riscv_pkg::CSR_SSTATEEN3: begin
+                    // For every bit in an mstateen CSR that is zero (whether read-only zero or set to zero),
+                    // the same bit appears as read-only zero in the matching hstateen and sstateen CSRs
+                    // For every bit in an hstateen CSR that is zero (whether read-only zero or set to zero),
+                    // the same bit appears as read-only zero in sstateen when accessed in VS-mode.
+                    mask =  64'h00000000 & // Reserved for future use, all bits are read-only zero
+                            (mstateen3_q & 
+                            ((def_pkg::RVH) && (v_mode_q && (priv_lvl_q == riscv_pkg::PRIV_LVL_S))) ?
+                                hstateen3_q : 64'hFFFFFFFF);
+                    sstateen3_d = (sstateen3_q & ~mask[31:0]) | (csr_wdata[31:0] & mask[31:0]);
+                end
 
                 //hypervisor mode registers
                 riscv_pkg::CSR_HSTATUS: begin
@@ -1285,6 +1418,42 @@ module csr_bsc#(
                 riscv_pkg::CSR_HTIMEDELTA: begin
                     if (def_pkg::RVH)   htimedelta_d = csr_wdata;
                     else                update_access_exception = 1'b1;
+                end
+                riscv_pkg::CSR_HSTATEEN0: begin
+                    if (def_pkg::RVH) begin
+                        // For every bit in an mstateen CSR that is zero (whether read-only zero or set to zero),
+                        // the same bit appears as read-only zero in the matching hstateen and sstateen CSRs
+                        mask = (riscv_pkg::HSTATEEN0_SE | riscv_pkg::HSTATEEN0_ENVCFG) & mstateen0_q; // all other bits are read-only zero
+                        hstateen0_d = (hstateen0_q & ~mask) | (csr_wdata & mask);
+                    end
+                    else update_access_exception = 1'b1;
+                end
+                riscv_pkg::CSR_HSTATEEN1: begin
+                    if (def_pkg::RVH) begin
+                        // For every bit in an mstateen CSR that is zero (whether read-only zero or set to zero),
+                        // the same bit appears as read-only zero in the matching hstateen and sstateen CSRs
+                        mask = (mstateen1_q & riscv_pkg::HSTATEEN1_SE); // all other bits are reserved for future use
+                        hstateen1_d = (hstateen1_q & ~mask) | (csr_wdata & mask);
+                    end
+                    else update_access_exception = 1'b1;
+                end
+                riscv_pkg::CSR_HSTATEEN2: begin
+                    if (def_pkg::RVH) begin
+                        // For every bit in an mstateen CSR that is zero (whether read-only zero or set to zero),
+                        // the same bit appears as read-only zero in the matching hstateen and sstateen CSRs
+                        mask = (mstateen2_q & riscv_pkg::HSTATEEN2_SE); // all other bits are reserved for future use
+                        hstateen2_d = (hstateen2_q & ~mask) | (csr_wdata & mask);
+                    end
+                    else update_access_exception = 1'b1;
+                end
+                riscv_pkg::CSR_HSTATEEN3: begin
+                    if (def_pkg::RVH) begin
+                        // For every bit in an mstateen CSR that is zero (whether read-only zero or set to zero),
+                        // the same bit appears as read-only zero in the matching hstateen and sstateen CSRs
+                        mask = (mstateen3_q & riscv_pkg::HSTATEEN3_SE); // all other bits are reserved for future use
+                        hstateen3_d = (hstateen3_q & ~mask) | (csr_wdata & mask);
+                    end
+                    else update_access_exception = 1'b1;
                 end
                 
                 // virtual supervisor registers
@@ -1439,6 +1608,26 @@ module csr_bsc#(
                     mask = riscv_pkg::MIP_SSIP | riscv_pkg::MIP_STIP | riscv_pkg::MIP_SEIP | riscv_pkg::MIP_LCOFIP;
                   end
                   mip_d = (mip_q & ~mask) | (csr_wdata & mask);
+                end
+                riscv_pkg::CSR_MSTATEEN0: begin
+                    // all other bits are read-only zero
+                    mask = riscv_pkg::MSTATEEN0_SE | riscv_pkg::MSTATEEN0_ENVCFG;
+                    mstateen0_d = (csr_wdata & mask);
+                end
+                riscv_pkg::CSR_MSTATEEN1: begin
+                    // all other bits are reserved for future use
+                    mask = riscv_pkg::MSTATEEN1_SE;
+                    mstateen1_d = (csr_wdata & mask);
+                end
+                riscv_pkg::CSR_MSTATEEN2: begin
+                    // all other bits are reserved for future use
+                    mask = riscv_pkg::MSTATEEN2_SE;
+                    mstateen2_d = (csr_wdata & mask);
+                end
+                riscv_pkg::CSR_MSTATEEN3: begin
+                    // all other bits are reserved for future use
+                    mask = riscv_pkg::MSTATEEN3_SE;
+                    mstateen3_d = (csr_wdata & mask);
                 end
                 // performance counters
                 riscv_pkg::CSR_MCYCLE:             cycle_d     = csr_wdata;
@@ -2171,7 +2360,7 @@ module csr_bsc#(
             flush_hfence_gvma = 1'b1;
         end
         // if we are violating our privilges do not update the architectural state
-        if (privilege_violation) begin
+        if (privilege_violation || (def_pkg::RVH && virtual_privilege_violation)) begin
             csr_we = 1'b0;
             csr_read = 1'b0;
         end
@@ -2221,6 +2410,120 @@ module csr_bsc#(
                 end
               end
             end
+            // check state-enable CSR accesses
+            unique case (csr_addr.address)
+                riscv_pkg::CSR_SSTATEEN0: begin
+                    if (priv_lvl_o == riscv_pkg::PRIV_LVL_M) begin
+                        privilege_violation = 1'b0;
+                    end else if (priv_lvl_o == riscv_pkg::PRIV_LVL_S) begin
+                        virtual_privilege_violation = v_mode_q & mstateen0_q.se & ~hstateen0_q.se;
+                        privilege_violation = ~mstateen0_q.se;
+                    end else if (priv_lvl_o == riscv_pkg::PRIV_LVL_U) begin
+                        virtual_privilege_violation = v_mode_q & mstateen0_q.se;
+                        if(v_mode_q) privilege_violation = ~mstateen0_q.se;
+                    end
+                end
+                riscv_pkg::CSR_SSTATEEN1: begin
+                    if (priv_lvl_o == riscv_pkg::PRIV_LVL_M) begin
+                        privilege_violation = 1'b0;
+                    end else if (priv_lvl_o == riscv_pkg::PRIV_LVL_S) begin
+                        virtual_privilege_violation = v_mode_q & mstateen1_q.se & ~hstateen1_q.se;
+                        privilege_violation = ~mstateen1_q.se;
+                    end else if (priv_lvl_o == riscv_pkg::PRIV_LVL_U) begin
+                        virtual_privilege_violation = v_mode_q & mstateen1_q.se;
+                        if(v_mode_q) privilege_violation = ~mstateen1_q.se;
+                    end
+                end
+                riscv_pkg::CSR_SSTATEEN2: begin
+                    if (priv_lvl_o == riscv_pkg::PRIV_LVL_M) begin
+                        privilege_violation = 1'b0;
+                    end else if (priv_lvl_o == riscv_pkg::PRIV_LVL_S) begin
+                        virtual_privilege_violation = v_mode_q & mstateen2_q.se & ~hstateen2_q.se;
+                        privilege_violation = ~mstateen2_q.se;
+                    end else if (priv_lvl_o == riscv_pkg::PRIV_LVL_U) begin
+                        virtual_privilege_violation = v_mode_q & mstateen2_q.se;
+                        if(v_mode_q) privilege_violation = ~mstateen2_q.se;
+                    end
+                end
+                riscv_pkg::CSR_SSTATEEN3: begin
+                    if (priv_lvl_o == riscv_pkg::PRIV_LVL_M) begin
+                        privilege_violation = 1'b0;
+                    end else if (priv_lvl_o == riscv_pkg::PRIV_LVL_S) begin
+                        virtual_privilege_violation = v_mode_q & mstateen3_q.se & ~hstateen3_q.se;
+                        privilege_violation = ~mstateen3_q.se;
+                    end else if (priv_lvl_o == riscv_pkg::PRIV_LVL_U) begin
+                        virtual_privilege_violation = v_mode_q & mstateen3_q.se;
+                        if(v_mode_q) privilege_violation = ~mstateen3_q.se;
+                    end
+                end
+                riscv_pkg::CSR_HSTATEEN0: begin
+                    if (priv_lvl_o == riscv_pkg::PRIV_LVL_M) begin
+                        privilege_violation = 1'b0;
+                    end else if (priv_lvl_o == riscv_pkg::PRIV_LVL_S) begin
+                        virtual_privilege_violation = v_mode_q & mstateen0_q.se;
+                        privilege_violation = ~mstateen0_q.se;
+                    end else if (priv_lvl_o == riscv_pkg::PRIV_LVL_U) begin
+                        virtual_privilege_violation = v_mode_q & mstateen0_q.se;
+                        if(v_mode_q) privilege_violation = ~mstateen0_q.se;
+                    end
+                end
+                riscv_pkg::CSR_HSTATEEN1: begin
+                    if (priv_lvl_o == riscv_pkg::PRIV_LVL_M) begin
+                        privilege_violation = 1'b0;
+                    end else if (priv_lvl_o == riscv_pkg::PRIV_LVL_S) begin
+                        virtual_privilege_violation = v_mode_q & mstateen1_q.se;
+                        privilege_violation = ~mstateen1_q.se;
+                    end else if (priv_lvl_o == riscv_pkg::PRIV_LVL_U) begin
+                        virtual_privilege_violation = v_mode_q & mstateen1_q.se;
+                        if(v_mode_q) privilege_violation = ~mstateen1_q.se;
+                    end
+                end
+                riscv_pkg::CSR_HSTATEEN2: begin
+                    if (priv_lvl_o == riscv_pkg::PRIV_LVL_M) begin
+                        privilege_violation = 1'b0;
+                    end else if (priv_lvl_o == riscv_pkg::PRIV_LVL_S) begin
+                        virtual_privilege_violation = v_mode_q & mstateen2_q.se;
+                        privilege_violation = ~mstateen2_q.se;
+                    end else if (priv_lvl_o == riscv_pkg::PRIV_LVL_U) begin
+                        virtual_privilege_violation = v_mode_q & mstateen2_q.se;
+                        if(v_mode_q) privilege_violation = ~mstateen2_q.se;
+                    end
+                end
+                riscv_pkg::CSR_HSTATEEN3: begin
+                    if (priv_lvl_o == riscv_pkg::PRIV_LVL_M) begin
+                        privilege_violation = 1'b0;
+                    end else if (priv_lvl_o == riscv_pkg::PRIV_LVL_S) begin
+                        virtual_privilege_violation = v_mode_q & mstateen3_q.se;
+                        privilege_violation = ~mstateen3_q.se;
+                    end else if (priv_lvl_o == riscv_pkg::PRIV_LVL_U) begin
+                        virtual_privilege_violation = v_mode_q & mstateen3_q.se;
+                        if(v_mode_q) privilege_violation = ~mstateen3_q.se;
+                    end
+                end
+                riscv_pkg::CSR_SENVCFG: begin
+                    if (priv_lvl_o == riscv_pkg::PRIV_LVL_M) begin
+                        privilege_violation = 1'b0;
+                    end else if (priv_lvl_o == riscv_pkg::PRIV_LVL_S) begin
+                        virtual_privilege_violation = v_mode_q & mstateen0_q.envcfg & ~hstateen0_q.envcfg;
+                        privilege_violation = ~mstateen0_q.envcfg;
+                    end else if (priv_lvl_o == riscv_pkg::PRIV_LVL_U) begin
+                        virtual_privilege_violation = v_mode_q & mstateen0_q.envcfg;
+                        if(v_mode_q) privilege_violation = ~mstateen0_q.envcfg;
+                    end
+                end
+                riscv_pkg::CSR_HENVCFG: begin
+                    if (priv_lvl_o == riscv_pkg::PRIV_LVL_M) begin
+                        privilege_violation = 1'b0;
+                    end else if (priv_lvl_o == riscv_pkg::PRIV_LVL_S) begin
+                        virtual_privilege_violation = v_mode_q & mstateen0_q.envcfg;
+                        privilege_violation = ~mstateen0_q.envcfg;
+                    end else if (priv_lvl_o == riscv_pkg::PRIV_LVL_U) begin
+                        virtual_privilege_violation = v_mode_q & mstateen0_q.envcfg;
+                        if(v_mode_q) privilege_violation = ~mstateen0_q.envcfg;
+                    end
+                end
+                default:;
+            endcase
           end
           //checks the level of the system instruction or sfence with tvm = 1 or sret and tsr = 1
           if ((system_insn && !priv_sufficient && !v_mode_q) || 
@@ -2254,6 +2557,45 @@ module csr_bsc#(
                       default: privilege_violation = 1'b1;
                   endcase
               end
+            // check state-enable CSR accesses
+            unique case (csr_addr.address)
+                riscv_pkg::CSR_SSTATEEN0: begin
+                    if (priv_lvl_o == riscv_pkg::PRIV_LVL_M) begin
+                        privilege_violation = 1'b0;
+                    end else if (priv_lvl_o == riscv_pkg::PRIV_LVL_S) begin
+                        privilege_violation = ~mstateen0_q.se;
+                    end
+                end
+                riscv_pkg::CSR_SSTATEEN1: begin
+                    if (priv_lvl_o == riscv_pkg::PRIV_LVL_M) begin
+                        privilege_violation = 1'b0;
+                    end else if (priv_lvl_o == riscv_pkg::PRIV_LVL_S) begin
+                        privilege_violation = ~mstateen1_q.se;
+                    end
+                end
+                riscv_pkg::CSR_SSTATEEN2: begin
+                    if (priv_lvl_o == riscv_pkg::PRIV_LVL_M) begin
+                        privilege_violation = 1'b0;
+                    end else if (priv_lvl_o == riscv_pkg::PRIV_LVL_S) begin
+                        privilege_violation = ~mstateen2_q.se;
+                    end
+                end
+                riscv_pkg::CSR_SSTATEEN3: begin
+                    if (priv_lvl_o == riscv_pkg::PRIV_LVL_M) begin
+                        privilege_violation = 1'b0;
+                    end else if (priv_lvl_o == riscv_pkg::PRIV_LVL_S) begin
+                        privilege_violation = ~mstateen3_q.se;
+                    end
+                end
+                riscv_pkg::CSR_SENVCFG: begin
+                    if (priv_lvl_o == riscv_pkg::PRIV_LVL_M) begin
+                        privilege_violation = 1'b0;
+                    end else if (priv_lvl_o == riscv_pkg::PRIV_LVL_S) begin
+                        privilege_violation = ~mstateen0_q.envcfg;
+                    end
+                end
+                default:;
+            endcase
           end
           //checks the level of the system instruction or sfence with tvm = 1 or sret and tsr = 1
           if ((system_insn && !priv_sufficient) || 
@@ -2599,6 +2941,10 @@ module csr_bsc#(
               hgatp_q                <= 64'b0;
               htinst_q               <= 64'b0;
               htimedelta_q           <= 64'b0;
+              hstateen0_q            <= 64'b0;
+              hstateen1_q            <= 64'b0;
+              hstateen2_q            <= 64'b0;
+              hstateen3_q            <= 64'b0;
               // virtual supervisor mode registers
               vsstatus_q             <= 64'b0;
               vstvec_q               <= 64'b0;
@@ -2627,6 +2973,10 @@ module csr_bsc#(
             mscratch_q             <= 64'b0;
             mtval_q                <= 64'b0;
             menvcfg_q              <= 64'b0;
+            mstateen0_q            <= 64'b0;
+            mstateen1_q            <= 64'b0;
+            mstateen2_q            <= 64'b0;
+            mstateen3_q            <= 64'b0;
             // supervisor mode registers
             sepc_q                 <= 64'b0;
             scause_q               <= 64'b0;
@@ -2636,6 +2986,10 @@ module csr_bsc#(
             sscratch_q             <= 64'b0;
             stval_q                <= 64'b0;
             satp_q                 <= 64'b0;
+            sstateen0_q            <= 32'b0;
+            sstateen1_q            <= 32'b0;
+            sstateen2_q            <= 32'b0;
+            sstateen3_q            <= 32'b0;
             // timer and counters
             cycle_q                <= 64'b0;
             instret_q              <= 64'b0;
@@ -2691,6 +3045,10 @@ module csr_bsc#(
               hgatp_q                <= hgatp_d;
               htinst_q               <= htinst_d;
               htimedelta_q           <= htimedelta_d;
+              hstateen0_q            <= hstateen0_d;
+              hstateen1_q            <= hstateen1_d;
+              hstateen2_q            <= hstateen2_d;
+              hstateen3_q            <= hstateen3_d;
               // virtual supervisor mode registers
               vsstatus_q             <= vsstatus_d;
               vstvec_q               <= vstvec_d;
@@ -2718,6 +3076,10 @@ module csr_bsc#(
             mscratch_q             <= mscratch_d;
             mtval_q                <= mtval_d;
             menvcfg_q              <= menvcfg_d;
+            mstateen0_q            <= mstateen0_d;
+            mstateen1_q            <= mstateen1_d;
+            mstateen2_q            <= mstateen2_d;
+            mstateen3_q            <= mstateen3_d;
             // supervisor mode registers
             sepc_q                 <= sepc_d;
             scause_q               <= scause_d;
@@ -2727,6 +3089,10 @@ module csr_bsc#(
             sscratch_q             <= sscratch_d;
             stval_q                <= stval_d;
             satp_q                 <= satp_d;
+            sstateen0_q            <= sstateen0_d;
+            sstateen1_q            <= sstateen1_d;
+            sstateen2_q            <= sstateen2_d;
+            sstateen3_q            <= sstateen3_d;
             // timer and counters
             cycle_q                <= cycle_d;
             instret_q              <= instret_d;
