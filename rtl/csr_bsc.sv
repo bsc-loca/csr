@@ -2010,7 +2010,8 @@ module csr_bsc#(
                                     riscv_pkg::INSTR_PAGE_FAULT, riscv_pkg::INSTR_ADDR_MISALIGNED,
                                     riscv_pkg::INSTR_GUEST_PAGE_FAULT, riscv_pkg::INSTR_ACCESS_FAULT}) begin
                 ex_tval = ex_origin_i;
-            end else if ((ex_i && (ex_cause_i == riscv_pkg::ILLEGAL_INSTR)) || (csr_xcpt && (csr_xcpt_cause == riscv_pkg::ILLEGAL_INSTR))) begin
+            end else if ((ex_i && (ex_cause_i inside {riscv_pkg::ILLEGAL_INSTR, riscv_pkg::VIRTUAL_INSTRUCTION})) || 
+                         (csr_xcpt && (csr_xcpt_cause inside {riscv_pkg::ILLEGAL_INSTR, riscv_pkg::VIRTUAL_INSTRUCTION}))) begin
                 ex_tval = ex_origin_i;
 	        end else if (csr_xcpt && (csr_xcpt_cause == riscv_pkg::BREAKPOINT)) begin
                 ex_tval = pc_i;
