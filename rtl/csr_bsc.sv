@@ -1267,6 +1267,7 @@ module csr_bsc#(
                     senvcfg_d   = csr_wdata;
                     if (def_pkg::RVH) begin
                         hstatus_d.hupmm = csr_wdata[33:32];
+                    end
                 end
                 riscv_pkg::CSR_SSCRATCH:           sscratch_d  = csr_wdata;
                 riscv_pkg::CSR_SEPC:               sepc_int    = {csr_wdata[63:1], 1'b0};
