@@ -2001,7 +2001,7 @@ module csr_bsc#(
             flush_vsatp_o = 1'b0;
             flush_hgatp_o = 1'b0;
             ex_tval = pc_i;
-            ex_tval2 = pc_i;
+            ex_tval2 = 64'b0;
             //tval is the actual pc except for the data access exeptions
             if (ex_i && ex_cause_i inside {riscv_pkg::LD_ADDR_MISALIGNED, riscv_pkg::LD_ACCESS_FAULT, 
                                     riscv_pkg::ST_AMO_ADDR_MISALIGNED, riscv_pkg::ST_AMO_ACCESS_FAULT,
@@ -2019,12 +2019,13 @@ module csr_bsc#(
                 ex_tval = 64'b0;
             end
             if(def_pkg::RVH) begin
-                if ((ex_i && (ex_cause_i == riscv_pkg::ILLEGAL_INSTR)) || (csr_xcpt && (csr_xcpt_cause == riscv_pkg::ILLEGAL_INSTR))) begin
-                    ex_tval2 = 64'b0;
-                end else if (csr_xcpt && (csr_xcpt_cause == riscv_pkg::BREAKPOINT)) begin
-                    ex_tval2 = pc_i;
-                end else begin
+                if ((ex_i && ex_cause_i inside {riscv_pkg::LD_GUEST_PAGE_FAULT,
+                                        riscv_pkg::ST_GUEST_AMO_PAGE_FAULT, riscv_pkg::INSTR_GUEST_PAGE_FAULT}) ||
+                    (csr_xcpt && (csr_xcpt_cause inside {riscv_pkg::LD_GUEST_PAGE_FAULT,
+                                        riscv_pkg::ST_GUEST_AMO_PAGE_FAULT, riscv_pkg::INSTR_GUEST_PAGE_FAULT}))) begin
                     ex_tval2 = ex_origin2_i;
+                end else begin
+                    ex_tval2 = 64'b0;
                 end
             end
             // figure out where to trap to
