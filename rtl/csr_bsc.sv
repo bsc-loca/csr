@@ -616,8 +616,8 @@ module csr_bsc#(
                     else              read_access_exception = 1'b1;
                 riscv_pkg::CSR_MENVCFG:            csr_rdata = {56'b0, menvcfg_q[7:4], 3'b0, menvcfg_q[0]}; // only FIOM & CMO bits implemented
                 riscv_pkg::CSR_MVENDORID:          csr_rdata = 64'b0; // not implemented
-                riscv_pkg::CSR_MARCHID:            csr_rdata = 64'b0; // not implemented
-                riscv_pkg::CSR_MIMPID:             csr_rdata = 64'b0; // not implemented
+                riscv_pkg::CSR_MARCHID:            csr_rdata = 64'd51; // RISC-V Manual
+                riscv_pkg::CSR_MIMPID:             csr_rdata = 64'h300; //v3.0.0
                 riscv_pkg::CSR_MHARTID:            csr_rdata = core_id_i; 
                 riscv_pkg::CSR_MCONFIGPTR:         csr_rdata = 64'b0; // not implemented
                 `ifdef PITON_CINCORANCH
