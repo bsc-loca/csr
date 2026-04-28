@@ -2815,8 +2815,8 @@ module csr_bsc#(
         if (trap_to_priv_lvl == riscv_pkg::PRIV_LVL_S) begin
             // vectorized trap addres
             trap_vector_base[63:8] = (def_pkg::RVH && trap_to_v_mode) ? vstvec_q[63:8] : stvec_q[63:8];
-            trap_vector_base[7:2] = (def_pkg::RVH && trap_to_v_mode) ? (((vstvec_q[1:0] == 2'b0) || csr_xcpt || !ex_cause_i[63]) ? vstvec_q[7:2] : trunc_sum_6bits(mtvec_q[7:2] + ex_cause_i[5:0]))
-                                                                     : (((stvec_q[1:0] == 2'b0) || csr_xcpt || !ex_cause_i[63]) ? stvec_q[7:2] : trunc_sum_6bits(mtvec_q[7:2] + ex_cause_i[5:0]));
+            trap_vector_base[7:2] = (def_pkg::RVH && trap_to_v_mode) ? (((vstvec_q[1:0] == 2'b0) || csr_xcpt || !ex_cause_i[63]) ? vstvec_q[7:2] : trunc_sum_6bits(vstvec_q[7:2] + ex_cause_i[5:0]))
+                                                                     : (((stvec_q[1:0] == 2'b0) || csr_xcpt || !ex_cause_i[63]) ? stvec_q[7:2] : trunc_sum_6bits(stvec_q[7:2] + ex_cause_i[5:0]));
             trap_vector_base[1:0] = 2'b0;
         end
 
