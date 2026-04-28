@@ -229,6 +229,8 @@ module csr_bsc#(
     logic [63:0] mie_q,       mie_d;
     logic [31:0] mcounteren_q,mcounteren_d;
     logic [31:0] mcountinhibit_q,mcountinhibit_d;
+    logic [63:0] mcyclecfg_q, mcyclecfg_d;
+    logic [63:0] minstretcfg_q, minstretcfg_d;
     logic [63:0] mscratch_q,  mscratch_d;
     logic [63:0] mepc_q,      mepc_d;
     logic [63:0] mcause_q,    mcause_d;
@@ -603,6 +605,8 @@ module csr_bsc#(
                 riscv_pkg::CSR_MTVEC:              csr_rdata = mtvec_q;
                 riscv_pkg::CSR_MCOUNTEREN:         csr_rdata = {{32{1'b0}}, mcounteren_q};
                 riscv_pkg::CSR_MCOUNTINHIBIT:      csr_rdata = {{32{1'b0}}, mcountinhibit_q[31:2], 1'b0, mcountinhibit_q[0]};
+                riscv_pkg::CSR_MCYCLECFG:          csr_rdata = mcyclecfg_q;
+                riscv_pkg::CSR_MINSTRETCFG:        csr_rdata = minstretcfg_q;
                 riscv_pkg::CSR_MSCRATCH:           csr_rdata = mscratch_q;
                 riscv_pkg::CSR_MEPC:               csr_rdata = mepc_q;
                 riscv_pkg::CSR_MCAUSE:             csr_rdata = mcause_q;
@@ -865,12 +869,46 @@ module csr_bsc#(
             retire_cnt = trunc_sum_2bits(retire_cnt + retire_i[i]);
         end
 
-        if (!ex_i && ~mcountinhibit_q[2])  begin 
-            instret = trunc_sum_64bits(instret + {{(64-$clog2(RETIRE_BW+1)){1'b0}},retire_cnt});
+        if (!ex_i && ~mcountinhibit_q[2])  begin
+            case (priv_lvl_o)
+                riscv_pkg::PRIV_LVL_M: instret = trunc_sum_64bits(instret + ({{(64-$clog2(RETIRE_BW+1)){1'b0}},retire_cnt} & {64{~minstretcfg_q[62]}}));
+                riscv_pkg::PRIV_LVL_S: begin
+                    if (def_pkg::RVH && v_mode_q) begin
+                        instret = trunc_sum_64bits(instret + ({{(64-$clog2(RETIRE_BW+1)){1'b0}},retire_cnt} & {64{~minstretcfg_q[59]}}));
+                    end else begin
+                        instret = trunc_sum_64bits(instret + ({{(64-$clog2(RETIRE_BW+1)){1'b0}},retire_cnt} & {64{~minstretcfg_q[61]}}));
+                    end
+                end
+                riscv_pkg::PRIV_LVL_U: begin
+                    if (def_pkg::RVH && v_mode_q) begin
+                        instret = trunc_sum_64bits(instret + ({{(64-$clog2(RETIRE_BW+1)){1'b0}},retire_cnt} & {64{~minstretcfg_q[58]}}));
+                    end else begin
+                        instret = trunc_sum_64bits(instret + ({{(64-$clog2(RETIRE_BW+1)){1'b0}},retire_cnt} & {64{~minstretcfg_q[60]}}));
+                    end
+                end
+                default: instret = trunc_sum_64bits(instret + ({{(64-$clog2(RETIRE_BW+1)){1'b0}},retire_cnt}));
+            endcase
         end
         instret_d = instret;
         // increment the cycle count 
-        cycle_d = trunc_sum_64bits(cycle_q + {63'b0,~mcountinhibit_q[0]});
+        case (priv_lvl_o)
+            riscv_pkg::PRIV_LVL_M: cycle_d = trunc_sum_64bits(cycle_q + {63'b0,((~mcountinhibit_q[0]) & (~mcyclecfg_q[62]))});
+            riscv_pkg::PRIV_LVL_S: begin
+                if (def_pkg::RVH && v_mode_q) begin
+                    cycle_d = trunc_sum_64bits(cycle_q + {63'b0,((~mcountinhibit_q[0]) & (~mcyclecfg_q[59]))});
+                end else begin
+                    cycle_d = trunc_sum_64bits(cycle_q + {63'b0,((~mcountinhibit_q[0]) & (~mcyclecfg_q[61]))});
+                end
+            end
+            riscv_pkg::PRIV_LVL_U: begin
+                if (def_pkg::RVH && v_mode_q) begin
+                    cycle_d = trunc_sum_64bits(cycle_q + {63'b0,((~mcountinhibit_q[0]) & (~mcyclecfg_q[58]))});
+                end else begin
+                    cycle_d = trunc_sum_64bits(cycle_q + {63'b0,((~mcountinhibit_q[0]) & (~mcyclecfg_q[60]))});
+                end
+            end
+            default: cycle_d = trunc_sum_64bits(cycle_q + {63'b0,~mcountinhibit_q[0]});
+        endcase
         
         scountovf_d = {perf_mhpm_ovf_bits_i, 3'b000};
 
@@ -964,6 +1002,8 @@ module csr_bsc#(
         mcause_int              = mcause_q;
         mcounteren_d            = mcounteren_q;
         mcountinhibit_d         = mcountinhibit_q;
+        mcyclecfg_d             = mcyclecfg_q;
+        minstretcfg_d           = minstretcfg_q;
         mscratch_d              = mscratch_q;
         mtval_int               = mtval_q;
 
@@ -1377,6 +1417,8 @@ module csr_bsc#(
 
                 riscv_pkg::CSR_MCOUNTEREN:         mcounteren_d = csr_wdata[31:0];
                 riscv_pkg::CSR_MCOUNTINHIBIT:      mcountinhibit_d = csr_wdata[31:0];
+                riscv_pkg::CSR_MCYCLECFG:          mcyclecfg_d = csr_wdata;
+                riscv_pkg::CSR_MINSTRETCFG:        minstretcfg_d = csr_wdata;
                 riscv_pkg::CSR_MSCRATCH:           mscratch_d  = csr_wdata;
                 riscv_pkg::CSR_MEPC:               mepc_int    = {csr_wdata[63:2], 2'b0}; // we only support IALIGN=32 since we do not support C extension
                 riscv_pkg::CSR_MCAUSE:             mcause_int  = csr_wdata;
@@ -2580,6 +2622,8 @@ module csr_bsc#(
             mcause_q               <= 64'b0;
             mcounteren_q           <= 32'b0;
             mcountinhibit_q        <= 32'b0;
+            mcyclecfg_q            <= 64'b0;
+            minstretcfg_q          <= 64'b0;
             mscratch_q             <= 64'b0;
             mtval_q                <= 64'b0;
             menvcfg_q              <= 64'b0;
@@ -2669,6 +2713,8 @@ module csr_bsc#(
             mcause_q               <= mcause_d;
             mcounteren_q           <= mcounteren_d;
             mcountinhibit_q        <= mcountinhibit_d;
+            mcyclecfg_q            <= mcyclecfg_d;
+            minstretcfg_q          <= minstretcfg_d;
             mscratch_q             <= mscratch_d;
             mtval_q                <= mtval_d;
             menvcfg_q              <= menvcfg_d;
