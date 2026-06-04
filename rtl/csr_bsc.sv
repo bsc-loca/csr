@@ -108,6 +108,10 @@ module csr_bsc#(
     output logic [1:0]                      csr_h_pmm_cfg_o,
     output logic [1:0]                      csr_hstatus_hupmm_o,
 
+    // Svpbmt enable bits
+    output logic                            menvcfg_pbmte_o,           // menvcfg.PBMTE: enables Svpbmt for S/G-stage PTEs
+    output logic                            henvcfg_pbmte_o,           // henvcfg.PBMTE: enables Svpbmt for VS-stage PTEs
+
     output logic [1:0]                      vcsr_vs_o,
     input logic                             vreg_modified_i,
     input logic                             vxsat_i,
@@ -597,7 +601,7 @@ module csr_bsc#(
                     if (def_pkg::RVH)   csr_rdata = 64'h0;
                     else                read_access_exception = 1'b1;
                 riscv_pkg::CSR_HENVCFG:
-                    if (def_pkg::RVH)   csr_rdata = {30'b0, henvcfg_q[33:32], 24'b0, henvcfg_q[7:4], 3'b0, henvcfg_q[0]}; // only implemented FIOM & CMO & PMM
+                    if (def_pkg::RVH)   csr_rdata = {1'b0, henvcfg_q[62], 28'b0, henvcfg_q[33:32], 24'b0, henvcfg_q[7:4], 3'b0, henvcfg_q[0]}; // only implemented FIOM & CMO & PMM
 
                     else                read_access_exception = 1'b1;
                 riscv_pkg::CSR_HCOUNTEREN:
@@ -702,7 +706,7 @@ module csr_bsc#(
                 riscv_pkg::CSR_MTVAL2:
                     if (def_pkg::RVH) csr_rdata = mtval2_q;
                     else              read_access_exception = 1'b1;
-                riscv_pkg::CSR_MENVCFG:            csr_rdata = {56'b0, menvcfg_q[7:4], 3'b0, menvcfg_q[0]}; // only FIOM & CMO bits implemented
+                riscv_pkg::CSR_MENVCFG:            csr_rdata = {1'b0, menvcfg_q[62], 54'b0, menvcfg_q[7:4], 3'b0, menvcfg_q[0]}; // only FIOM, CMO & PBMTE bits implemented
                 riscv_pkg::CSR_MVENDORID:          csr_rdata = 64'b0; // not implemented
                 riscv_pkg::CSR_MARCHID:            csr_rdata = 64'd51; // RISC-V Manual
                 riscv_pkg::CSR_MIMPID:             csr_rdata = 64'h300; //v3.0.0
@@ -2932,6 +2936,10 @@ module csr_bsc#(
     assign csr_s_pmm_cfg_o  = senvcfg_q[33:32];
     assign csr_h_pmm_cfg_o  = henvcfg_q[33:32];
     assign csr_hstatus_hupmm_o = def_pkg::RVH ? hstatus_q.hupmm : 2'b0;
+
+    // Svpbmt enable outputs
+    assign menvcfg_pbmte_o  = menvcfg_q[62];
+    assign henvcfg_pbmte_o  = def_pkg::RVH ? henvcfg_q[62] : 1'b0;
 
     // MMU outputs 
     assign satp_ppn_o       = satp_q.ppn[PPN_WIDTH-1:0];
