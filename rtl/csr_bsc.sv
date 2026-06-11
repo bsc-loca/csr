@@ -329,6 +329,9 @@ module csr_bsc#(
     logic insn_sfence_vm; 
     logic insn_hfence_vvma; 
     logic insn_hfence_gvma; 
+    logic insn_sinval_vma; 
+    logic insn_hinval_vvma; 
+    logic insn_hinval_gvma; 
     logic insn_wfi;
 
     // vector instruction wires
@@ -361,9 +364,12 @@ module csr_bsc#(
 
     // flush caused by a sfence instruction
     logic flush_sfence;
+    logic flush_sinval_vma;
     // flush caused by a hfence instruction
     logic flush_hfence_vvma;
     logic flush_hfence_gvma;
+    logic flush_hinval_vvma;
+    logic flush_hinval_gvma;
     
     logic [11:0] perf_addr_dist;
 
@@ -384,6 +390,9 @@ module csr_bsc#(
     assign insn_sfence_vm = ((5'b01001 == rw_addr_i[9:5]) && system_insn && priv_sufficient) ? 1'b1 : 1'b0;
     assign insn_hfence_vvma = (def_pkg::RVH && (6'b010001 == rw_addr_i[10:5]) && system_insn && priv_sufficient) ? 1'b1 : 1'b0;
     assign insn_hfence_gvma = (def_pkg::RVH && (6'b110001 == rw_addr_i[10:5]) && system_insn && priv_sufficient) ? 1'b1 : 1'b0;
+    assign insn_sinval_vma = ((5'b01011 == rw_addr_i[9:5]) && system_insn && priv_sufficient) ? 1'b1 : 1'b0;
+    assign insn_hinval_vvma = (def_pkg::RVH && (6'b010011 == rw_addr_i[10:5]) && system_insn && priv_sufficient) ? 1'b1 : 1'b0;
+    assign insn_hinval_gvma = (def_pkg::RVH && (6'b110011 == rw_addr_i[10:5]) && system_insn && priv_sufficient) ? 1'b1 : 1'b0;
     assign insn_wfi = ((10'b0100000101 == rw_addr_i[9:0]) && system_insn && priv_sufficient) ? 1'b1 : 1'b0;
 
     //////////////////////////////////////////////
@@ -2006,12 +2015,26 @@ module csr_bsc#(
             else flush = 1'b1;
           end
         end
+        if (flush_sinval_vma) begin
+            if (!def_pkg::RVH) flush = 1'b1;
+            else begin
+                if      ((priv_lvl_q == riscv_pkg::PRIV_LVL_S) && v_mode_q)  flush_vsatp = 1'b1;
+                else if ((priv_lvl_q == riscv_pkg::PRIV_LVL_S) && !v_mode_q) flush_satp  = 1'b1;
+                else flush = 1'b1;
+            end
+        end
         // a hfence is executed and a flush is needed
         if (def_pkg::RVH && flush_hfence_vvma) begin
             flush_vsatp = 1'b1;
         end
+        if (def_pkg::RVH && flush_hinval_vvma) begin
+            flush_vsatp = 1'b1;
+        end
         // a hfence is executed and a flush is needed
         if (def_pkg::RVH && flush_hfence_gvma) begin
+            flush_hgatp = 1'b1;
+        end
+        if (def_pkg::RVH && flush_hinval_gvma) begin
             flush_hgatp = 1'b1;
         end
         flush_o = flush;
@@ -2369,6 +2392,9 @@ module csr_bsc#(
         flush_sfence = 1'b0;
         flush_hfence_vvma = 1'b0;
         flush_hfence_gvma = 1'b0;
+        flush_sinval_vma = 1'b0;
+        flush_hinval_vvma = 1'b0;
+        flush_hinval_gvma =1'b0;
         csr_wdata = w_data_core_i;
         csr_we    = 1'b1;
         csr_read  = 1'b1;
@@ -2398,6 +2424,12 @@ module csr_bsc#(
             flush_hfence_vvma = 1'b1;
         end else if (def_pkg::RVH && insn_hfence_gvma) begin // flush_o can not be changed here, it changes in csr_update process
             flush_hfence_gvma = 1'b1;
+        end else if (insn_sinval_vma) begin // flush_o can not be changed here, it changes in csr_update process
+            flush_sinval_vma = 1'b1;
+        end else if (def_pkg::RVH && insn_hinval_vvma) begin // flush_o can not be changed here, it changes in csr_update process
+            flush_hinval_vvma = 1'b1;
+        end else if (def_pkg::RVH && insn_hinval_gvma) begin // flush_o can not be changed here, it changes in csr_update process
+            flush_hinval_gvma = 1'b1;
         end
         // if we are violating our privilges do not update the architectural state
         if (privilege_violation || (def_pkg::RVH && virtual_privilege_violation)) begin
@@ -2568,12 +2600,16 @@ module csr_bsc#(
           //checks the level of the system instruction or sfence with tvm = 1 or sret and tsr = 1
           if ((system_insn && !priv_sufficient && !v_mode_q) || 
               ((insn_sfence_vm && (priv_lvl_q == riscv_pkg::PRIV_LVL_S)) && (mstatus_q.tvm == 1'b1)) || 
+              ((insn_sinval_vma && (priv_lvl_q == riscv_pkg::PRIV_LVL_S)) && (mstatus_q.tvm == 1'b1)) || 
               ((insn_hfence_gvma && (!v_mode_q && (priv_lvl_q == riscv_pkg::PRIV_LVL_S))) && (mstatus_q.tvm == 1'b1)) || 
+              ((insn_hinval_gvma && (!v_mode_q && (priv_lvl_q == riscv_pkg::PRIV_LVL_S))) && (mstatus_q.tvm == 1'b1)) || 
               ((insn_sret && ((priv_lvl_q == riscv_pkg::PRIV_LVL_S) && !v_mode_q)) && (mstatus_q.tsr == 1'b1))) begin
               privilege_violation = 1'b1;
           end else if ((system_insn && !priv_sufficient && v_mode_q) || 
                        ((insn_sfence_vm && (v_mode_q && (priv_lvl_q == riscv_pkg::PRIV_LVL_S))) && (hstatus_q.vtvm == 1'b1)) ||
+                       ((insn_sinval_vma && (v_mode_q && (priv_lvl_q == riscv_pkg::PRIV_LVL_S))) && (hstatus_q.vtvm == 1'b1)) ||
                        ((insn_hfence_gvma || insn_hfence_vvma) && v_mode_q) ||
+                       ((insn_hinval_gvma || insn_hinval_vvma) && v_mode_q) ||
                        ((insn_sret && ((priv_lvl_q == riscv_pkg::PRIV_LVL_S) && v_mode_q)) && (hstatus_q.vtsr == 1'b1))) begin
               virtual_privilege_violation = 1'b1;
           end
@@ -2640,6 +2676,7 @@ module csr_bsc#(
           //checks the level of the system instruction or sfence with tvm = 1 or sret and tsr = 1
           if ((system_insn && !priv_sufficient) || 
               ((insn_sfence_vm && (priv_lvl_q == riscv_pkg::PRIV_LVL_S)) && (mstatus_q.tvm == 1'b1)) || 
+              ((insn_sinval_vma && (priv_lvl_q == riscv_pkg::PRIV_LVL_S)) && (mstatus_q.tvm == 1'b1)) || 
               ((insn_sret && (priv_lvl_q == riscv_pkg::PRIV_LVL_S)) && (mstatus_q.tsr == 1'b1))) begin
               privilege_violation = 1'b1;
           end
