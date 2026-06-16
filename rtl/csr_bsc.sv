@@ -326,13 +326,18 @@ module csr_bsc#(
     logic insn_break; 
     logic insn_mret;
     logic insn_sret;
-    logic insn_sfence_vm; 
-    logic insn_hfence_vvma; 
-    logic insn_hfence_gvma; 
-    logic insn_sinval_vma; 
-    logic insn_hinval_vvma; 
-    logic insn_hinval_gvma; 
+    logic insn_sfence_vm;
+    logic insn_hfence_vvma;
+    logic insn_hfence_gvma;
+    logic insn_sinval_vma;
+    logic insn_hinval_vvma;
+    logic insn_hinval_gvma;
+    logic insn_sfence_inval_ir;
     logic insn_wfi;
+
+    logic pending_sinval_d,      pending_sinval_q;
+    logic pending_hinval_vvma_d, pending_hinval_vvma_q;
+    logic pending_hinval_gvma_d, pending_hinval_gvma_q;
 
     // vector instruction wires
     logic vsetvl_insn;
@@ -391,8 +396,9 @@ module csr_bsc#(
     assign insn_hfence_vvma = (def_pkg::RVH && (6'b010001 == rw_addr_i[10:5]) && system_insn && priv_sufficient) ? 1'b1 : 1'b0;
     assign insn_hfence_gvma = (def_pkg::RVH && (6'b110001 == rw_addr_i[10:5]) && system_insn && priv_sufficient) ? 1'b1 : 1'b0;
     assign insn_sinval_vma = ((5'b01011 == rw_addr_i[9:5]) && system_insn && priv_sufficient) ? 1'b1 : 1'b0;
-    assign insn_hinval_vvma = (def_pkg::RVH && (6'b010011 == rw_addr_i[10:5]) && system_insn && priv_sufficient) ? 1'b1 : 1'b0;
-    assign insn_hinval_gvma = (def_pkg::RVH && (6'b110011 == rw_addr_i[10:5]) && system_insn && priv_sufficient) ? 1'b1 : 1'b0;
+    assign insn_hinval_vvma    = (def_pkg::RVH && (6'b010011 == rw_addr_i[10:5]) && system_insn && priv_sufficient) ? 1'b1 : 1'b0;
+    assign insn_hinval_gvma    = (def_pkg::RVH && (6'b110011 == rw_addr_i[10:5]) && system_insn && priv_sufficient) ? 1'b1 : 1'b0;
+    assign insn_sfence_inval_ir = ((rw_addr_i == 12'b000110000001) && system_insn && priv_sufficient) ? 1'b1 : 1'b0;
     assign insn_wfi = ((10'b0100000101 == rw_addr_i[9:0]) && system_insn && priv_sufficient) ? 1'b1 : 1'b0;
 
     //////////////////////////////////////////////
@@ -2015,26 +2021,25 @@ module csr_bsc#(
             else flush = 1'b1;
           end
         end
-        if (flush_sinval_vma) begin
-            if (!def_pkg::RVH) flush = 1'b1;
-            else begin
-                if      ((priv_lvl_q == riscv_pkg::PRIV_LVL_S) && v_mode_q)  flush_vsatp = 1'b1;
-                else if ((priv_lvl_q == riscv_pkg::PRIV_LVL_S) && !v_mode_q) flush_satp  = 1'b1;
-                else flush = 1'b1;
+
+        if (insn_sfence_inval_ir) begin
+            if (pending_sinval_q) begin
+                if (!def_pkg::RVH) flush = 1'b1;
+                else begin
+                    if      ((priv_lvl_q == riscv_pkg::PRIV_LVL_S) && v_mode_q)  flush_vsatp = 1'b1;
+                    else if ((priv_lvl_q == riscv_pkg::PRIV_LVL_S) && !v_mode_q) flush_satp  = 1'b1;
+                    else flush = 1'b1;
+                end
             end
+            if (def_pkg::RVH && pending_hinval_vvma_q) flush_vsatp = 1'b1;
+            if (def_pkg::RVH && pending_hinval_gvma_q) flush_hgatp = 1'b1;
         end
         // a hfence is executed and a flush is needed
         if (def_pkg::RVH && flush_hfence_vvma) begin
             flush_vsatp = 1'b1;
         end
-        if (def_pkg::RVH && flush_hinval_vvma) begin
-            flush_vsatp = 1'b1;
-        end
         // a hfence is executed and a flush is needed
         if (def_pkg::RVH && flush_hfence_gvma) begin
-            flush_hgatp = 1'b1;
-        end
-        if (def_pkg::RVH && flush_hinval_gvma) begin
             flush_hgatp = 1'b1;
         end
         flush_o = flush;
@@ -2435,6 +2440,21 @@ module csr_bsc#(
         if (privilege_violation || (def_pkg::RVH && virtual_privilege_violation)) begin
             csr_we = 1'b0;
             csr_read = 1'b0;
+        end
+    end
+
+    always_comb begin : svinval_pending
+        pending_sinval_d      = pending_sinval_q;
+        pending_hinval_vvma_d = pending_hinval_vvma_q;
+        pending_hinval_gvma_d = pending_hinval_gvma_q;
+        if (insn_sfence_inval_ir) begin
+            pending_sinval_d      = 1'b0;
+            pending_hinval_vvma_d = 1'b0;
+            pending_hinval_gvma_d = 1'b0;
+        end else begin
+            if (flush_sinval_vma)  pending_sinval_d      = 1'b1;
+            if (flush_hinval_vvma) pending_hinval_vvma_d = 1'b1;
+            if (flush_hinval_gvma) pending_hinval_gvma_d = 1'b1;
         end
     end
 
@@ -3113,6 +3133,10 @@ module csr_bsc#(
             vtype_q           <= {1'b1, 63'b0};
             vnarrow_wide_en_q <= 1'b0;
             vcsr_q            <= 'h0;
+            // Svinval pending invalidation state
+            pending_sinval_q      <= 1'b0;
+            pending_hinval_vvma_q <= 1'b0;
+            pending_hinval_gvma_q <= 1'b0;
             // Debug mode
             dcsr_q <= 32'h40000003;
             dpc_q <= 64'b0;
@@ -3226,7 +3250,11 @@ module csr_bsc#(
             dscratch0_q            <= dscratch0_d;
             dscratch1_q            <= dscratch1_d;
             debug_mode_en_q        <= debug_mode_en_d;
-            debug_ebreak_q <= debug_ebreak_d;
+            debug_ebreak_q         <= debug_ebreak_d;
+            // Svinval pending invalidation state
+            pending_sinval_q       <= pending_sinval_d;
+            pending_hinval_vvma_q  <= pending_hinval_vvma_d;
+            pending_hinval_gvma_q  <= pending_hinval_gvma_d;
 
         end
     end
