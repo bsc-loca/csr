@@ -597,7 +597,7 @@ module csr_bsc#(
                     if (def_pkg::RVH)   csr_rdata = 64'h0;
                     else                read_access_exception = 1'b1;
                 riscv_pkg::CSR_HENVCFG:
-                    if (def_pkg::RVH)   csr_rdata = {30'b0, senvcfg_q[33:32], 24'b0, senvcfg_q[7:4], 3'b0, senvcfg_q[0]};
+                    if (def_pkg::RVH)   csr_rdata = {30'b0, henvcfg_q[33:32], 24'b0, henvcfg_q[7:4], 3'b0, henvcfg_q[0]}; // only implemented FIOM & CMO & PMM
 
                     else                read_access_exception = 1'b1;
                 riscv_pkg::CSR_HCOUNTEREN:
