@@ -50,7 +50,7 @@ module hpm_counters
     output  logic [HPM_NUM_COUNTERS+3-1:3] mhpm_ovf_bits_o 
 );
 
-    localparam HPM_NUM_EVENTS_BITS   = $clog2(HPM_NUM_EVENTS);
+    localparam HPM_NUM_EVENTS_BITS   = $clog2(HPM_NUM_EVENTS + 1);
     localparam HPM_NUM_COUNTERS_BITS = $clog2(HPM_NUM_COUNTERS+3);
 
     function [63:0] trunc_sum_64bits(input [64:0] val_in);
