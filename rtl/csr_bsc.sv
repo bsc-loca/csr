@@ -718,7 +718,7 @@ module csr_bsc#(
                     else                read_access_exception = 1'b1;
                 riscv_pkg::CSR_VSTIMECMP: begin
                     if (def_pkg::RVH) begin
-                        if (((menvcfg_d[63] == 1'b0 || henvcfg_q[63] == 1'b0)) && (priv_lvl_o != riscv_pkg::PRIV_LVL_M) ||
+                        if (((menvcfg_q[63] == 1'b0 || henvcfg_q[63] == 1'b0)) && (priv_lvl_o != riscv_pkg::PRIV_LVL_M) ||
                              (mcounteren_q[1] == 1'b0 && priv_lvl_o != riscv_pkg::PRIV_LVL_M) ||
                              (hcounteren_q[1] == 1'b0 && priv_lvl_o != riscv_pkg::PRIV_LVL_M)) begin
                                 virtual_read_access_exception = 1'b1;
@@ -1598,7 +1598,7 @@ module csr_bsc#(
                     else                update_access_exception = 1'b1;
                 riscv_pkg::CSR_VSTIMECMP:
                     if (def_pkg::RVH) begin
-                        if (((menvcfg_d[63] == 1'b0 || henvcfg_q[63] == 1'b0)) && (priv_lvl_o != riscv_pkg::PRIV_LVL_M) ||
+                        if (((menvcfg_q[63] == 1'b0 || henvcfg_q[63] == 1'b0)) && (priv_lvl_o != riscv_pkg::PRIV_LVL_M) ||
                              (mcounteren_q[1] == 1'b0 && priv_lvl_o != riscv_pkg::PRIV_LVL_M) ||
                              (hcounteren_q[1] == 1'b0 && priv_lvl_o != riscv_pkg::PRIV_LVL_M)) begin
                             update_access_exception = 1'b1;
