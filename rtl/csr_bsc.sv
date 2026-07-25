@@ -1334,7 +1334,12 @@ module csr_bsc#(
                 end
 
                 riscv_pkg::CSR_SCOUNTEREN:         scounteren_d =  {csr_wdata[31:0]};
-                riscv_pkg::CSR_STVEC:              stvec_d     = {csr_wdata[63:2], 1'b0, csr_wdata[0]};
+                riscv_pkg::CSR_STVEC: begin
+                    stvec_d     = {csr_wdata[63:2], 1'b0, csr_wdata[0]};
+                    // vectored mode (mode[0]=1) requires the same 64*4-byte base
+                    // alignment as mtvec; without this stvec accepts a base mtvec rejects
+                    if (csr_wdata[0]) stvec_d = {csr_wdata[63:8], 7'b0, csr_wdata[0]};
+                end
                 riscv_pkg::CSR_SENVCFG: begin
                     senvcfg_d   = csr_wdata;
                     if (def_pkg::RVH) begin
