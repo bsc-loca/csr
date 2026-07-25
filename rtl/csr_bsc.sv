@@ -535,9 +535,9 @@ module csr_bsc#(
                     // For every bit in an hstateen CSR that is zero (whether read-only zero or set to zero),
                     // the same bit appears as read-only zero in sstateen when accessed in VS-mode.
                     csr_rdata = {{32{1'b0}}, sstateen1_q} &
-                                (mstateen0_q & 
+                                (mstateen1_q & 
                                 (((def_pkg::RVH) && (v_mode_q && (priv_lvl_q == riscv_pkg::PRIV_LVL_S))) ?
-                                    hstateen0_q : 64'hFFFFFFFF));
+                                    hstateen1_q : 64'hFFFFFFFF));
                 end
                 riscv_pkg::CSR_SSTATEEN2: begin
                     // For every bit in an mstateen CSR that is zero (whether read-only zero or set to zero),
@@ -545,9 +545,9 @@ module csr_bsc#(
                     // For every bit in an hstateen CSR that is zero (whether read-only zero or set to zero),
                     // the same bit appears as read-only zero in sstateen when accessed in VS-mode.
                     csr_rdata = {{32{1'b0}}, sstateen2_q} &
-                                (mstateen0_q & 
+                                (mstateen2_q & 
                                 (((def_pkg::RVH) && (v_mode_q && (priv_lvl_q == riscv_pkg::PRIV_LVL_S))) ?
-                                    hstateen0_q : 64'hFFFFFFFF));
+                                    hstateen2_q : 64'hFFFFFFFF));
                 end
                 riscv_pkg::CSR_SSTATEEN3: begin
                     // For every bit in an mstateen CSR that is zero (whether read-only zero or set to zero),
@@ -555,9 +555,9 @@ module csr_bsc#(
                     // For every bit in an hstateen CSR that is zero (whether read-only zero or set to zero),
                     // the same bit appears as read-only zero in sstateen when accessed in VS-mode.
                     csr_rdata = {{32{1'b0}}, sstateen3_q} &
-                                (mstateen0_q & 
+                                (mstateen3_q & 
                                 (((def_pkg::RVH) && (v_mode_q && (priv_lvl_q == riscv_pkg::PRIV_LVL_S))) ?
-                                    hstateen0_q : 64'hFFFFFFFF));
+                                    hstateen3_q : 64'hFFFFFFFF));
                 end
                 // hypervisor mode registers
                 riscv_pkg::CSR_HSTATUS:
