@@ -1867,7 +1867,7 @@ module csr_bsc#(
             end
         end
         if (def_pkg::RVH) begin
-          vsstatus_d.sd = (vsstatus_q.xs == riscv_pkg::Dirty) | (vsstatus_q.fs == riscv_pkg::Dirty);
+          vsstatus_d.sd = (vsstatus_q.xs == riscv_pkg::Dirty) | (vsstatus_q.fs == riscv_pkg::Dirty) | (vsstatus_q.vs == riscv_pkg::Dirty);
         end
 
 
