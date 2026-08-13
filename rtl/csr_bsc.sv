@@ -1699,7 +1699,7 @@ module csr_bsc#(
                 riscv_pkg::CSR_MCYCLECFG:          mcyclecfg_d = csr_wdata;
                 riscv_pkg::CSR_MINSTRETCFG:        minstretcfg_d = csr_wdata;
                 riscv_pkg::CSR_MSCRATCH:           mscratch_d  = csr_wdata;
-                riscv_pkg::CSR_MEPC:               mepc_int    = {csr_wdata[63:2], 2'b0}; // we only support IALIGN=32 since we do not support C extension
+                riscv_pkg::CSR_MEPC:               mepc_int    = {csr_wdata[63:1], 1'b0};
                 riscv_pkg::CSR_MCAUSE:             mcause_int  = csr_wdata;
                 riscv_pkg::CSR_MTVAL:              mtval_int   = csr_wdata;
                 riscv_pkg::CSR_MENVCFG:            menvcfg_d   = csr_wdata;
