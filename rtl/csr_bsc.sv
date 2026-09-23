@@ -394,9 +394,17 @@ module csr_bsc#(
 
     assign stimer_int = (reg_time_q >= stimecmp_q);
 
+    logic stimer_pending;
+
+    logic menvcfg_stce_q;
+    logic stce_disable;
+
+    assign stce_disable   = menvcfg_stce_q & ~menvcfg_q[63];
+    assign stimer_pending = stce_disable ? 1'b0 : (menvcfg_q[63] ? stimer_int : mip_q[5]);
+
     logic vstimer_int;
 
-    assign vstimer_int = ((reg_time_q + htimedelta_q) >= vstimecmp_q);
+    assign vstimer_int = menvcfg_q[63] && henvcfg_q[63] && ((reg_time_q + htimedelta_q) >= vstimecmp_q);
 
     //////////////////////////////////////////////
     // System Instructions Decode
@@ -633,16 +641,8 @@ module csr_bsc#(
                 riscv_pkg::CSR_HVIP:
                     if (def_pkg::RVH)   csr_rdata = mip_q & def_pkg::VS_DELEG_INTERRUPTS;
                     else                read_access_exception = 1'b1;
-                // If menvcfg or henvcfg forbids it que revert to previous
-                // behaviours, ie, returning mip.
                 riscv_pkg::CSR_HIP:
-                    if (def_pkg::RVH)   begin
-                        if (menvcfg_q[63] == 1'b0 || henvcfg_q[63] == 1'b0) begin
-                            csr_rdata = mip_q & def_pkg::HS_DELEG_INTERRUPTS;
-                        end else begin
-                            csr_rdata = ({mip_q[63:7], vstimer_int, mip_q[5:0]}) & def_pkg::HS_DELEG_INTERRUPTS;
-                        end
-                    end
+                    if (def_pkg::RVH)   csr_rdata = ({mip_q[63:7], (mip_q[6] | vstimer_int), mip_q[5:0]}) & def_pkg::HS_DELEG_INTERRUPTS;
                     else                read_access_exception = 1'b1;
                 riscv_pkg::CSR_HIE:
                     if (def_pkg::RVH)   csr_rdata = mie_q & def_pkg::HS_DELEG_INTERRUPTS;
@@ -654,7 +654,7 @@ module csr_bsc#(
                     if (def_pkg::RVH)   csr_rdata = 64'h0;
                     else                read_access_exception = 1'b1;
                 riscv_pkg::CSR_HENVCFG:
-                    if (def_pkg::RVH)   csr_rdata = {henvcfg_q[63:62], 28'b0, henvcfg_q[33:32], 24'b0, henvcfg_q[7:4], 3'b0, henvcfg_q[0]}; // only implemented sstc, FIOM & CMO & PMM
+                    if (def_pkg::RVH)   csr_rdata = {henvcfg_q[63] & menvcfg_q[63], henvcfg_q[62], 28'b0, henvcfg_q[33:32], 24'b0, henvcfg_q[7:4], 3'b0, henvcfg_q[0]}; // only implemented sstc, FIOM & CMO & PMM
 
                     else                read_access_exception = 1'b1;
                 riscv_pkg::CSR_HCOUNTEREN:
@@ -707,7 +707,8 @@ module csr_bsc#(
                     if (def_pkg::RVH)   csr_rdata = vsstatus_q;
                     else                read_access_exception = 1'b1;
                 riscv_pkg::CSR_VSIP:
-                    if (def_pkg::RVH)   csr_rdata = (mip_q & def_pkg::VS_DELEG_INTERRUPTS & hideleg_q) >> 1;
+                    if (def_pkg::RVH)   csr_rdata = ((mip_q & def_pkg::VS_DELEG_INTERRUPTS & hideleg_q)
+                                                   | ({63'b0, (vstimer_int & hideleg_q[riscv_pkg::IRQ_VS_TIMER])} << riscv_pkg::IRQ_VS_TIMER)) >> 1;
                     else                read_access_exception = 1'b1;
                 riscv_pkg::CSR_VSIE:
                     if (def_pkg::RVH)   csr_rdata = (mie_q & def_pkg::VS_DELEG_INTERRUPTS & hideleg_q) >> 1;
@@ -1138,7 +1139,7 @@ module csr_bsc#(
         // External Interrupts
         // ---------------------
         // the IRQ_M_EXT = irq_i || rocc_interrupt_i, IRQ_M_SOFT = m_soft_irq_i and IRQ_M_TIMER = time_irq_i
-        mip_d = {mip_q[63:14], perf_count_ovf_int_req_i || mip_q[13], mip_q[12], irq_q[0], mip_q[10:8], time_irq_i, mip_q[6], stimer_int, mip_q[4], m_soft_irq_i, mip_q[2:0]};
+        mip_d = {mip_q[63:14], perf_count_ovf_int_req_i || mip_q[13], mip_q[12], irq_q[0], mip_q[10:8], time_irq_i, mip_q[6], stimer_pending, mip_q[4], m_soft_irq_i, mip_q[2:0]};
 
         hedeleg_d               = (def_pkg::RVH) ? hedeleg_q    : 0;
         hideleg_d               = (def_pkg::RVH) ? hideleg_q    : 0;
@@ -1494,7 +1495,7 @@ module csr_bsc#(
                     end
                 end
                 riscv_pkg::CSR_HENVCFG:
-                    if (def_pkg::RVH)   henvcfg_d   = csr_wdata;
+                    if (def_pkg::RVH)   henvcfg_d   = {csr_wdata[63] & menvcfg_q[63], csr_wdata[62:0]};
                     else                update_access_exception = 1'b1;
                 riscv_pkg::CSR_HCOUNTEREN: begin
                     if (def_pkg::RVH)   hcounteren_d = csr_wdata[31:0];
@@ -2058,7 +2059,7 @@ module csr_bsc#(
             interrupt_cause = riscv_pkg::VS_SW_INTERRUPT;
         end
         // Virtual Supervisor Timer Interrupt
-        else if (mie_q[riscv_pkg::VS_TIMER_INTERRUPT[5:0]] && mip_q[riscv_pkg::VS_TIMER_INTERRUPT[5:0]]) begin
+        else if (mie_q[riscv_pkg::VS_TIMER_INTERRUPT[5:0]] && (mip_q[riscv_pkg::VS_TIMER_INTERRUPT[5:0]] || vstimer_int)) begin
             interrupt_cause = riscv_pkg::VS_TIMER_INTERRUPT;
         end
         
@@ -3208,6 +3209,7 @@ module csr_bsc#(
             mscratch_q             <= 64'b0;
             mtval_q                <= 64'b0;
             menvcfg_q              <= 64'b0;
+            menvcfg_stce_q         <= 1'b0;
             mstateen0_q            <= 64'b0;
             mstateen1_q            <= 64'b0;
             mstateen2_q            <= 64'b0;
@@ -3325,6 +3327,7 @@ module csr_bsc#(
             mscratch_q             <= mscratch_d;
             mtval_q                <= mtval_d;
             menvcfg_q              <= menvcfg_d;
+            menvcfg_stce_q         <= menvcfg_q[63];
             mstateen0_q            <= mstateen0_d;
             mstateen1_q            <= mstateen1_d;
             mstateen2_q            <= mstateen2_d;
