@@ -764,7 +764,7 @@ module csr_bsc#(
                 riscv_pkg::CSR_MEPC:               csr_rdata = mepc_q;
                 riscv_pkg::CSR_MCAUSE:             csr_rdata = mcause_q;
                 riscv_pkg::CSR_MTVAL:              csr_rdata = mtval_q;
-                riscv_pkg::CSR_MIP:                csr_rdata = mip_q;
+                riscv_pkg::CSR_MIP:                csr_rdata = (def_pkg::RVH) ? (mip_q | ({63'b0, vstimer_int} << riscv_pkg::IRQ_VS_TIMER)) : mip_q;
                 riscv_pkg::CSR_MTINST:
                     if (def_pkg::RVH) csr_rdata = mtinst_q;
                     else              read_access_exception = 1'b1;
