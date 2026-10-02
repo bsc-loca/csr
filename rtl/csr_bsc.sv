@@ -66,6 +66,7 @@ module csr_bsc#(
     input logic                             time_irq_i,                 // timer interrupt
     input logic [1:0]                       irq_i,                      // external interrupt input - [0] = Machine, [1] = Supervisor
     input logic                             m_soft_irq_i,               // Machine software interrupt form the axi module
+    input logic                             rs_lost_i,                  // Zawrs: reservation-lost level from L1.5 (WRS wakeup)
     output logic                            interrupt_o,                // Inerruption wire to the core
     output logic [WORD_WIDTH-1:0]           interrupt_cause_o,          // Interruption cause
 
@@ -322,6 +323,10 @@ module csr_bsc#(
     logic priv_sufficient;
     logic wfi_d, wfi_q;
     logic [1:0] irq_q;
+    // Zawrs wait-on-reservation-set sleep state
+    logic wrs_d, wrs_q;
+    logic wrs_sto_d, wrs_sto_q; // 1 while sleeping in a WRS.STO (timeout applies)
+    logic [7:0] wrs_cnt_d, wrs_cnt_q; // WRS.STO short-timeout counter (implementation-defined)
 
     // instruction wires
     logic insn_call;
@@ -336,6 +341,10 @@ module csr_bsc#(
     logic insn_hinval_gvma;
     logic insn_sfence_inval_ir;
     logic insn_wfi;
+    // Zawrs WRS.NTO (funct12 0x00D) and WRS.STO (funct12 0x01D), no priv check:
+    // available in all privilege modes, TW/VTW trapping handled like WFI
+    logic insn_wrs_nto;
+    logic insn_wrs_sto;
 
     logic pending_sinval_d,      pending_sinval_q;
     logic pending_hinval_vvma_d, pending_hinval_vvma_q;
@@ -410,6 +419,8 @@ module csr_bsc#(
     assign insn_hinval_gvma    = (def_pkg::RVH && (6'b110011 == rw_addr_i[10:5]) && system_insn && priv_sufficient) ? 1'b1 : 1'b0;
     assign insn_sfence_inval_ir = ((rw_addr_i == 12'b000110000001) && system_insn && priv_sufficient) ? 1'b1 : 1'b0;
     assign insn_wfi = ((10'b0100000101 == rw_addr_i[9:0]) && system_insn && priv_sufficient) ? 1'b1 : 1'b0;
+    assign insn_wrs_nto = ((12'b000000001101 == rw_addr_i) && system_insn) ? 1'b1 : 1'b0;
+    assign insn_wrs_sto = ((12'b000000011101 == rw_addr_i) && system_insn) ? 1'b1 : 1'b0;
 
     //////////////////////////////////////////////
     // Vector Instructions Decode
@@ -2894,7 +2905,16 @@ module csr_bsc#(
         end else if (insn_wfi && mstatus_q.tw) begin
             csr_xcpt_cause = riscv_pkg::ILLEGAL_INSTR;
             csr_xcpt = 1'b1;
+        end else if (insn_wrs_nto && mstatus_q.tw && (priv_lvl_q != riscv_pkg::PRIV_LVL_M)) begin
+            // Zawrs: TW traps WRS.NTO outside M-mode, like WFI
+            csr_xcpt_cause = riscv_pkg::ILLEGAL_INSTR;
+            csr_xcpt = 1'b1;
         end else if (def_pkg::RVH && insn_wfi && hstatus_q.vtw && v_mode_q && (priv_lvl_q == riscv_pkg::PRIV_LVL_S)) begin
+          csr_xcpt_cause = riscv_pkg::VIRTUAL_INSTRUCTION;
+          csr_xcpt = 1'b1;
+        end else if (def_pkg::RVH && insn_wrs_nto && hstatus_q.vtw && v_mode_q && (priv_lvl_q == riscv_pkg::PRIV_LVL_S) &&
+                     !mstatus_q.tw) begin
+          // Zawrs: VTW traps WRS.NTO in VS/VU when TW is clear, like WFI
           csr_xcpt_cause = riscv_pkg::VIRTUAL_INSTRUCTION;
           csr_xcpt = 1'b1;
       end
@@ -2918,6 +2938,36 @@ module csr_bsc#(
         // for the interrupt
         end else if (insn_wfi && !ex_i && !csr_xcpt) begin
             wfi_d = 1'b1;
+        end
+    end
+
+    // -------------------
+    // Wait on Reservation Set (Zawrs WRS.NTO/WRS.STO)
+    // -------------------
+    // Like WFI, but additionally wakes when the LR/SC reservation set is lost
+    // (rs_lost_i level from the L1.5 adapter). WRS.STO also wakes on a short
+    // implementation-defined timeout (8-bit stall-cycle counter).
+    // If the reservation was already lost when WRS executes, it completes
+    // immediately like a NOP. Spurious wakeups are legal: software must loop.
+    localparam int unsigned WRS_STO_TIMEOUT = 255;
+    logic wrs_wake;
+    assign wrs_wake = ((((|mip_q) || irq_q[0] || irq_q[1]) && interrupt_cause[63]) ||
+                       debug_halt_req_i || rs_lost_i ||
+                       (wrs_sto_q && (wrs_cnt_q >= WRS_STO_TIMEOUT)));
+    always_comb begin : wrs_ctrl
+        wrs_d = wrs_q;
+        wrs_sto_d = wrs_sto_q;
+        wrs_cnt_d = wrs_cnt_q;
+        if (wrs_wake) begin
+            wrs_d = 1'b0;
+            wrs_sto_d = 1'b0;
+            wrs_cnt_d = '0;
+        end else if ((insn_wrs_nto || insn_wrs_sto) && !ex_i && !csr_xcpt) begin
+            wrs_d = 1'b1;
+            wrs_sto_d = insn_wrs_sto;
+            wrs_cnt_d = '0;
+        end else if (wrs_q && wrs_sto_q) begin
+            wrs_cnt_d = wrs_cnt_q + 1'b1;
         end
     end
 
@@ -2956,11 +3006,11 @@ module csr_bsc#(
     // -------------------
 `ifdef CONF_SARGANTANA_ENABLE_PCR
     assign csr_replay_o = pcr_req_valid & !pcr_req_ready_i; // pcr write but not ready
-    assign csr_stall_o = wfi_q || // or waiting pcr response 
+    assign csr_stall_o = wfi_q || wrs_q || // or waiting pcr response 
                   (pcr_wait_resp_d && (!pcr_resp_valid_i || (pcr_resp_core_id_i != core_id_i)));
 `else
     assign csr_replay_o = 1'b0;
-    assign csr_stall_o = wfi_q;
+    assign csr_stall_o = wfi_q || wrs_q;
 `endif // CONF_SARGANTANA_ENABLE_PCR
 
 `ifdef CONF_SARGANTANA_ENABLE_DYN_FPGA_MEM_LATENCY
@@ -3176,6 +3226,10 @@ module csr_bsc#(
             en_ld_st_translation_q <= 1'b0;
             // wait for interrupt
             wfi_q                  <= 1'b0;
+            // Zawrs wait on reservation set
+            wrs_q                  <= 1'b0;
+            wrs_sto_q              <= 1'b0;
+            wrs_cnt_q              <= '0;
             // register external interrupt for timing
             irq_q                  <= 2'b0;
 
@@ -3289,6 +3343,10 @@ module csr_bsc#(
             en_ld_st_translation_q <= en_ld_st_translation_d;
             // wait for interrupt
             wfi_q                  <= wfi_d;
+            // Zawrs wait on reservation set
+            wrs_q                  <= wrs_d;
+            wrs_sto_q              <= wrs_sto_d;
+            wrs_cnt_q              <= wrs_cnt_d;
             // register external interrupt for timing
             irq_q                  <= irq_i;
 
