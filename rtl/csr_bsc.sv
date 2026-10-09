@@ -1125,7 +1125,8 @@ module csr_bsc#(
         end 
 
         dirty_fp_state_csr      = 1'b0;
-        if (freg_modified_i && (mstatus_q.fs != riscv_pkg::Off)) begin
+        if ((freg_modified_i || (fcsr_flags_valid_i && (|fcsr_flags_bits_i)))
+            && (mstatus_q.fs != riscv_pkg::Off)) begin
             dirty_fp_state_csr = 1'b1;
         end
 
