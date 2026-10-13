@@ -24,8 +24,8 @@ module csr_bsc#(
     parameter PPN_WIDTH = 20,
     parameter PROGRAM_BUFFER_ADDR = 'h400,
     parameter CSR_ADDR_WIDTH = 12,
-    parameter ASID_WIDTH = 13,
-    parameter VMID_WIDTH = 11,
+    parameter ASID_WIDTH = drac_pkg::ASID_SIZE,
+    parameter VMID_WIDTH = drac_pkg::ASID_SIZE - 2,
     parameter RETIRE_BW = 2,
     parameter VLEN_V = 16384
 )(
@@ -137,9 +137,9 @@ module csr_bsc#(
     output logic                            en_g_translation_o,
     output logic                            csr_hu_o,
 
-    output logic [PPN_WIDTH-1:0]            satp_ppn_o,                 // Page table base pointer for the PTW
-    output logic [PPN_WIDTH-1:0]            vsatp_ppn_o,                // Page table base pointer for the PTW
-    output logic [PPN_WIDTH-1:0]            hgatp_ppn_o,                // Page table base pointer for the PTW
+    output riscv_pkg::satp_t                satp_o,                 // Page table base pointer and ASID for the PTW
+    output riscv_pkg::satp_t                vsatp_o,                // Page table base pointer and ASID for the PTW
+    output riscv_pkg::hgatp_t               hgatp_o,                // Page table base pointer and ASID for the PTW
 
     output logic [63:0]                     evec_o,                      // virtual address of the PC to execute after a Interrupt or exception
 
@@ -3117,9 +3117,9 @@ module csr_bsc#(
     assign henvcfg_pbmte_o  = def_pkg::RVH ? henvcfg_q[62] : 1'b0;
 
     // MMU outputs 
-    assign satp_ppn_o       = satp_q.ppn[PPN_WIDTH-1:0];
-    assign vsatp_ppn_o      = def_pkg::RVH ? vsatp_q.ppn[PPN_WIDTH-1:0] : '0;
-    assign hgatp_ppn_o      = def_pkg::RVH ? hgatp_q.ppn[PPN_WIDTH-1:0] : '0;
+    assign satp_o       = satp_q;
+    assign vsatp_o      = def_pkg::RVH ? vsatp_q : '0;
+    assign hgatp_o      = def_pkg::RVH ? hgatp_q : '0;
 
     // we support bare memory addressing and SV39
     if (def_pkg::RVH) begin
