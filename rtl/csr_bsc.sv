@@ -2852,7 +2852,9 @@ module csr_bsc#(
                     end
                 end
             
-                if (vtype_new[2] || (vl_d <= (vlmax >> 1))) begin
+                // 2*SEW must fit in ELEN=64; only m1/fractional LMUL exist, so the wide
+                // operand must fit in one register (fractional LMUL or vl <= VLMAX/2)
+                if ((vtype_new[5:3] != 3'b011) && (vtype_new[2] || (vl_d <= (vlmax >> 1)))) begin
                     vnarrow_wide_en_d = 1'b1;
                 end else begin
                     vnarrow_wide_en_d = 1'b0;
