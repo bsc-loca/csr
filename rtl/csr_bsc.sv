@@ -158,7 +158,7 @@ module csr_bsc#(
     input  logic [31:3]                     perf_mhpm_ovf_bits_i,
 
 `ifndef VIDRIOL_DISABLE
-    // HPIC Prefetcher CSR
+    // Vidriol prefetcher CSR
     output logic [15:0]                     vidriol_degree_o,
 `endif
 
