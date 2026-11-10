@@ -1348,7 +1348,7 @@ module csr_bsc#(
                     end
                 end
                 riscv_pkg::CSR_SSCRATCH:           sscratch_d  = csr_wdata;
-                riscv_pkg::CSR_SEPC:               sepc_int    = {csr_wdata[63:1], 1'b0};
+                riscv_pkg::CSR_SEPC:               sepc_int    = {csr_wdata[63:2], 2'b0};
                 riscv_pkg::CSR_SCAUSE:             scause_int  = csr_wdata;
                 riscv_pkg::CSR_STVAL:              stval_int   = csr_wdata;
                 riscv_pkg::CSR_STIMECMP: begin
@@ -1606,7 +1606,7 @@ module csr_bsc#(
                     if (def_pkg::RVH)   vsscratch_d = csr_wdata;
                     else                update_access_exception = 1'b1;
                 riscv_pkg::CSR_VSEPC:
-                    if (def_pkg::RVH)   vsepc_d = {csr_wdata[63:1], 1'b0};
+                    if (def_pkg::RVH)   vsepc_d = {csr_wdata[63:2], 2'b0};
                     else                update_access_exception = 1'b1;
                 riscv_pkg::CSR_VSCAUSE:
                     if (def_pkg::RVH)   vscause_d = csr_wdata;
